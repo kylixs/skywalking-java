@@ -20,6 +20,8 @@ package org.apache.skywalking.apm.agent.core.plugin;
 
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.matcher.ElementMatcher;
+import net.bytebuddy.matcher.ElementMatchers;
 import org.apache.skywalking.apm.agent.core.logging.api.ILog;
 import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.ConstructorInterceptPoint;
@@ -29,6 +31,8 @@ import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.ClassEnha
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.v2.InstanceMethodsInterceptV2Point;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.v2.StaticMethodsInterceptV2Point;
 import org.apache.skywalking.apm.agent.core.plugin.match.ClassMatch;
+import org.apache.skywalking.apm.agent.core.plugin.match.IndirectMatch;
+import org.apache.skywalking.apm.agent.core.plugin.match.NameMatch;
 import org.apache.skywalking.apm.agent.core.util.CollectionUtil;
 import org.apache.skywalking.apm.util.StringUtil;
 
@@ -144,6 +148,16 @@ public abstract class AbstractClassEnhancePluginDefine {
      * @return {@link ClassMatch}
      */
     protected abstract ClassMatch enhanceClass();
+
+    public ElementMatcher<? super TypeDescription> classMatcher() {
+        ClassMatch match = this.enhanceClass();
+        if (match instanceof IndirectMatch) {
+            return ((IndirectMatch) match).buildJunction();
+        } else {
+            NameMatch nameMatch = (NameMatch) match;
+            return ElementMatchers.named(nameMatch.getClassName());
+        }
+    }
 
     /**
      * Witness classname list. Why need witness classname? Let's see like this: A library existed two released versions

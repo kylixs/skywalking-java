@@ -55,6 +55,7 @@ public class AbstractInterceptTest {
     public static final String PROJECT_SERVICE_CLASS_NAME = "org.apache.skywalking.apm.agent.bytebuddy.biz.ProjectService";
     public static final String DOC_SERVICE_CLASS_NAME = "org.apache.skywalking.apm.agent.bytebuddy.biz.DocService";
     public static final String SAY_HELLO_METHOD = "sayHello";
+    public static final String GREETING_METHOD = "greeting";
     public static final int BASE_INT_VALUE = 100;
     public static final String CONSTRUCTOR_INTERCEPTOR_CLASS = "constructorInterceptorClass";
     public static final String METHOD_INTERCEPTOR_CLASS = "methodInterceptorClass";

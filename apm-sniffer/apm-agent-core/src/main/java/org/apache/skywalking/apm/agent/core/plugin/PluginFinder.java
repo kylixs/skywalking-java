@@ -105,8 +105,52 @@ public class PluginFinder {
         return new ProtectiveShieldMatcher(judge);
     }
 
+    public ElementMatcher<? super TypeDescription> buildMatch(List<AbstractClassEnhancePluginDefine> pluginDefines) {
+        Map<String, LinkedList<AbstractClassEnhancePluginDefine>> nameMatchDefines = new HashMap<>();
+        ElementMatcher.Junction judge = new AbstractJunction<NamedElement>() {
+            @Override
+            public boolean matches(NamedElement target) {
+                return nameMatchDefines.containsKey(target.getActualName());
+            }
+        };
+        judge = judge.and(not(isInterface()));
+        for (AbstractClassEnhancePluginDefine define : pluginDefines) {
+            ClassMatch match = define.enhanceClass();
+            if (match instanceof NameMatch) {
+                NameMatch nameMatch = (NameMatch) match;
+                nameMatchDefines.computeIfAbsent(nameMatch.getClassName(), k -> new LinkedList<>()).add(define);
+            } else {
+                judge = judge.or(((IndirectMatch) match).buildJunction());
+            }
+        }
+        return new ProtectiveShieldMatcher(judge);
+    }
+
     public List<AbstractClassEnhancePluginDefine> getBootstrapClassMatchDefine() {
         return bootstrapClassMatchDefine;
+    }
+
+    public Map<String, List<AbstractClassEnhancePluginDefine>> getAllPlugins() {
+        Map<String, List<AbstractClassEnhancePluginDefine>> map = new HashMap<>();
+        List<AbstractClassEnhancePluginDefine> list = new ArrayList<>();
+        for (LinkedList<AbstractClassEnhancePluginDefine> defines : nameMatchDefine.values()) {
+            for (AbstractClassEnhancePluginDefine pluginDefine : defines) {
+                addPluginDefine(map, pluginDefine);
+            }
+        }
+        for (AbstractClassEnhancePluginDefine pluginDefine : signatureMatchDefine) {
+            addPluginDefine(map, pluginDefine);
+        }
+        return map;
+    }
+
+    private void addPluginDefine(Map<String, List<AbstractClassEnhancePluginDefine>> map, AbstractClassEnhancePluginDefine pluginDefine) {
+        Class<? extends AbstractClassEnhancePluginDefine> pluginDefineClass = pluginDefine.getClass();
+        String classFile = pluginDefineClass.getName().replace('.', '/') + ".class";
+        String path = pluginDefineClass.getClassLoader().getResource(classFile).getPath();
+        int index = path.indexOf('!');
+        String jarPath = index > 0 ? path.substring(0, index) : path;
+        map.computeIfAbsent(jarPath, k -> new ArrayList<>()).add(pluginDefine);
     }
 
     public static void pluginInitCompleted() {

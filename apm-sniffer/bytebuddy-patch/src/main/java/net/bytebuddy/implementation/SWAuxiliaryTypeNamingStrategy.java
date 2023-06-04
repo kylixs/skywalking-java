@@ -18,6 +18,7 @@
 
 package net.bytebuddy.implementation;
 
+import net.bytebuddy.agent.builder.SWTransformThreadLocals;
 import net.bytebuddy.description.field.FieldDescription;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
@@ -45,9 +46,9 @@ public class SWAuxiliaryTypeNamingStrategy implements AuxiliaryType.NamingStrate
     public String name(TypeDescription instrumentedType, AuxiliaryType auxiliaryType) {
         String description = findDescription(auxiliaryType);
         if (description != null) {
-            return instrumentedType.getName() + "$" + suffix + "$" + RandomString.hashOf(description.hashCode());
+            return instrumentedType.getName() + "$" + suffix + "$" + SWTransformThreadLocals.getTransformerHash() + "$" + RandomString.hashOf(description.hashCode());
         }
-        return instrumentedType.getName() + "$" + suffix + "$" + RandomString.hashOf(auxiliaryType.hashCode());
+        return instrumentedType.getName() + "$" + suffix + "$" + SWTransformThreadLocals.getTransformerHash() + "$" + RandomString.hashOf(auxiliaryType.hashCode());
     }
 
     private String findDescription(AuxiliaryType auxiliaryType) {

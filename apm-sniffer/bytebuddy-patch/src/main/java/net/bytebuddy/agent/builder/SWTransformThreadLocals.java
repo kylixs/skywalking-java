@@ -18,31 +18,25 @@
 
 package net.bytebuddy.agent.builder;
 
-import net.bytebuddy.description.method.MethodDescription;
-import net.bytebuddy.dynamic.scaffold.inline.MethodNameTransformer;
+import net.bytebuddy.agent.builder.AgentBuilder.Transformer;
 import net.bytebuddy.utility.RandomString;
 
-/**
- * Generate fixed origin method name
- */
-public class SWMethodNameTransformer implements MethodNameTransformer {
+public class SWTransformThreadLocals {
+    private static ThreadLocal<Transformer> transformerThreadLocal = new ThreadLocal<>();
 
-    private static final String DEFAULT_PREFIX = "original$";
-
-    private String prefix;
-
-    public SWMethodNameTransformer() {
-        this(DEFAULT_PREFIX);
+    public static void setTransformer(Transformer transformer) {
+        transformerThreadLocal.set(transformer);
     }
 
-    public SWMethodNameTransformer(String prefix) {
-        this.prefix = prefix;
+    public static Transformer getTransformer() {
+        return transformerThreadLocal.get();
     }
 
-    @Override
-    public String transform(MethodDescription methodDescription) {
-        return prefix + methodDescription.getInternalName() + "$" + SWTransformThreadLocals.getTransformerHash()
-                + "$" + RandomString.hashOf(methodDescription.toString().hashCode());
+    public static String getTransformerHash() {
+        Transformer transformer = SWTransformThreadLocals.getTransformer();
+        if (transformer == null) {
+            return "null";
+        }
+        return RandomString.hashOf(transformer.hashCode());
     }
-
 }

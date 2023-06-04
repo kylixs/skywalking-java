@@ -82,4 +82,19 @@ public class InstMethodsInterV2 {
         }
         return ret;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        InstMethodsInterV2 that = (InstMethodsInterV2) o;
+
+        return interceptor.equals(that.interceptor);
+    }
+
+    @Override
+    public int hashCode() {
+        return interceptor.hashCode();
+    }
 }

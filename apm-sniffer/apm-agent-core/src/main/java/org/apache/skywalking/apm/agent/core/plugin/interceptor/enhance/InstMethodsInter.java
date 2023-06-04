@@ -101,4 +101,18 @@ public class InstMethodsInter {
         }
         return ret;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        InstMethodsInter that = (InstMethodsInter) o;
+        return interceptor.equals(that.interceptor);
+    }
+
+    @Override
+    public int hashCode() {
+        return interceptor.hashCode();
+    }
 }

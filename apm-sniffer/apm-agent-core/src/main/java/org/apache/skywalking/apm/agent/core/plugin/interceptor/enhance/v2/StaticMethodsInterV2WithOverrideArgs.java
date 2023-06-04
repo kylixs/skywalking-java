@@ -98,4 +98,19 @@ public class StaticMethodsInterV2WithOverrideArgs {
         }
         return ret;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        StaticMethodsInterV2WithOverrideArgs that = (StaticMethodsInterV2WithOverrideArgs) o;
+
+        return staticMethodsAroundInterceptorClassName.equals(that.staticMethodsAroundInterceptorClassName);
+    }
+
+    @Override
+    public int hashCode() {
+        return staticMethodsAroundInterceptorClassName.hashCode();
+    }
 }

@@ -20,6 +20,7 @@ package org.apache.skywalking.apm.agent;
 
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.agent.builder.NativeMethodStrategySupport;
 import net.bytebuddy.agent.builder.SWAsmVisitorWrapper;
+import net.bytebuddy.agent.builder.SWTransformThreadLocals;
 import net.bytebuddy.description.NamedElement;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
@@ -53,7 +55,6 @@ import org.apache.skywalking.apm.agent.core.plugin.PluginBootstrap;
 import org.apache.skywalking.apm.agent.core.plugin.PluginException;
 import org.apache.skywalking.apm.agent.core.plugin.PluginFinder;
 import org.apache.skywalking.apm.agent.core.plugin.bootstrap.BootstrapInstrumentBoost;
-import org.apache.skywalking.apm.agent.core.plugin.bytebuddy.CacheableTransformerDecorator;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.DelegateNamingResolver;
 import org.apache.skywalking.apm.agent.core.plugin.jdk9module.JDK9ModuleExporter;
 
@@ -99,6 +100,7 @@ public class SkyWalkingAgent {
             return;
         }
 
+        LOGGER.info("Skywalking agent begin to install transformer ...");
         // Generate random name trait
         String nameTrait = generateNameTrait();
         DelegateNamingResolver.setNameTrait(nameTrait);
@@ -129,21 +131,11 @@ public class SkyWalkingAgent {
             return;
         }
 
-        if (Config.Agent.IS_CACHE_ENHANCED_CLASS) {
-            try {
-                agentBuilder = agentBuilder.with(new CacheableTransformerDecorator(Config.Agent.CLASS_CACHE_MODE));
-                LOGGER.info("SkyWalking agent class cache [{}] activated.", Config.Agent.CLASS_CACHE_MODE);
-            } catch (Exception e) {
-                LOGGER.error(e, "SkyWalking agent can't active class cache.");
-            }
+        for (List<AbstractClassEnhancePluginDefine> pluginDefines : pluginFinder.getAllPlugins().values()) {
+            agentBuilder = agentBuilder.type(pluginFinder.buildMatch(pluginDefines))
+                    .transform(new TransformerV2(pluginDefines));
         }
-
-        agentBuilder.type(pluginFinder.buildMatch())
-                    .transform(new Transformer(pluginFinder))
-                    .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-                    .with(new RedefinitionListener())
-                    .with(new Listener())
-                    .installOn(instrumentation);
+        agentBuilder.installOn(instrumentation);
 
         PluginFinder.pluginInitCompleted();
 
@@ -169,7 +161,10 @@ public class SkyWalkingAgent {
         NativeMethodStrategySupport.inject(agentBuilder, nameTrait);
 
         agentBuilder = agentBuilder.with(AgentBuilder.DescriptionStrategy.Default.POOL_FIRST)
-                .with(new SWClassFileLocator(instrumentation, SkyWalkingAgent.class.getClassLoader()));
+                .with(new SWClassFileLocator(instrumentation, SkyWalkingAgent.class.getClassLoader()))
+                .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                .with(new RedefinitionListener())
+                .with(new Listener());
         return agentBuilder;
     }
 
@@ -216,6 +211,49 @@ public class SkyWalkingAgent {
             }
 
             LOGGER.debug("Matched class {}, but ignore by finding mechanism.", typeDescription.getTypeName());
+            return builder;
+        }
+    }
+
+    private static class TransformerV2 implements AgentBuilder.Transformer {
+        private final List<AbstractClassEnhancePluginDefine> pluginDefines;
+
+        TransformerV2(List<AbstractClassEnhancePluginDefine> pluginDefines) {
+            this.pluginDefines = pluginDefines;
+        }
+
+        @Override
+        public DynamicType.Builder<?> transform(final DynamicType.Builder<?> builder,
+                                                final TypeDescription typeDescription,
+                                                final ClassLoader classLoader,
+                                                final JavaModule javaModule,
+                                                final ProtectionDomain protectionDomain) {
+            // filter
+            List<AbstractClassEnhancePluginDefine> defines = new ArrayList<>();
+            for (AbstractClassEnhancePluginDefine define : this.pluginDefines) {
+                if (define.classMatcher().matches(typeDescription)) {
+                    defines.add(define);
+                }
+            }
+            if (defines.size() > 0) {
+                SWTransformThreadLocals.setTransformer(this);
+                LoadedLibraryCollector.registerURLClassLoader(classLoader);
+                DelegateNamingResolver.reset(typeDescription.getTypeName());
+                DynamicType.Builder<?> newBuilder = builder.visit(new SWAsmVisitorWrapper());
+                EnhanceContext context = new EnhanceContext();
+                for (AbstractClassEnhancePluginDefine define : defines) {
+                    DynamicType.Builder<?> possibleNewBuilder = define.define(
+                            typeDescription, newBuilder, classLoader, context);
+                    if (possibleNewBuilder != null) {
+                        newBuilder = possibleNewBuilder;
+                    }
+                }
+                if (context.isEnhanced()) {
+                    LOGGER.debug("Finish the prepare stage for {}.", typeDescription.getName());
+                }
+
+                return newBuilder;
+            }
             return builder;
         }
     }
