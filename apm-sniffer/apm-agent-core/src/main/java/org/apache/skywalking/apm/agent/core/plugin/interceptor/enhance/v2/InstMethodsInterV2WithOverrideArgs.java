@@ -102,19 +102,4 @@ public class InstMethodsInterV2WithOverrideArgs {
         }
         return ret;
     }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        InstMethodsInterV2WithOverrideArgs that = (InstMethodsInterV2WithOverrideArgs) o;
-
-        return interceptor.equals(that.interceptor);
-    }
-
-    @Override
-    public int hashCode() {
-        return interceptor.hashCode();
-    }
 }
