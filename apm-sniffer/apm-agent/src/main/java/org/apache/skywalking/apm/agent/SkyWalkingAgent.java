@@ -191,7 +191,6 @@ public class SkyWalkingAgent {
                                                 final JavaModule javaModule,
                                                 final ProtectionDomain protectionDomain) {
             LoadedLibraryCollector.registerURLClassLoader(classLoader);
-            DelegateNamingResolver.reset(typeDescription.getTypeName());
             List<AbstractClassEnhancePluginDefine> pluginDefines = pluginFinder.find(typeDescription);
             if (pluginDefines.size() > 0) {
                 DynamicType.Builder<?> newBuilder = builder.visit(new SWAsmVisitorWrapper());
@@ -238,7 +237,6 @@ public class SkyWalkingAgent {
             if (defines.size() > 0) {
                 SWTransformThreadLocals.setTransformer(this);
                 LoadedLibraryCollector.registerURLClassLoader(classLoader);
-                DelegateNamingResolver.reset(typeDescription.getTypeName());
                 DynamicType.Builder<?> newBuilder = builder.visit(new SWAsmVisitorWrapper());
                 EnhanceContext context = new EnhanceContext();
                 for (AbstractClassEnhancePluginDefine define : defines) {
