@@ -39,7 +39,7 @@ import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
 import java.security.ProtectionDomain;
 
-public class MultipleInterceptorTest extends AbstractRetransformTest {
+public class MultipleTransformersTest extends AbstractRetransformTest {
 
     String dumpFolder = "target/class-dump";
 
@@ -48,15 +48,16 @@ public class MultipleInterceptorTest extends AbstractRetransformTest {
         String className = BIZ_FOO_CLASS_NAME;
         String nameTrait = getNameTrait(1);
         deleteDuplicatedFields = true;
+        String methodName = SAY_HELLO_METHOD;
 
-        enableClassDump();
+        //enableClassDump();
 
         AgentBuilder.Transformer transformer1 = new AgentBuilder.Transformer() {
             AgentBuilder.Transformer instance = this;
+
             @Override
             public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, ProtectionDomain protectionDomain) {
                 int round = 1;
-                String methodName = SAY_HELLO_METHOD;
                 String interceptorClassName = METHOD_INTERCEPTOR_CLASS + "$" + methodName + "$" + round;
                 String fieldName = nameTrait + "_delegate$" + methodName + round;
                 SWTransformThreadLocals.setTransformer(instance);
@@ -72,11 +73,7 @@ public class MultipleInterceptorTest extends AbstractRetransformTest {
                         ))
                         .method(ElementMatchers.nameContainsIgnoreCase(methodName))
                         .intercept(MethodDelegation.withDefaultConfiguration()
-                                .to(new InstMethodsInter(interceptorClassName, classLoader), fieldName))
-//                        .method(ElementMatchers.is(methodName))
-//                        .intercept(MethodDelegation.withDefaultConfiguration()
-//                                .to(new InstMethodsInter(interceptorClassName + "2", classLoader), fieldName + "2"))
-                        ;
+                                .to(new InstMethodsInter(interceptorClassName, classLoader), fieldName));
             }
         };
 
@@ -86,8 +83,6 @@ public class MultipleInterceptorTest extends AbstractRetransformTest {
             @Override
             public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, ProtectionDomain protectionDomain) {
                 int round = 2;
-                String methodName = SAY_HELLO_METHOD;
-//                            String methodName = GREETING_METHOD;
                 String interceptorClassName = METHOD_INTERCEPTOR_CLASS + "$" + methodName + "$" + round;
                 String fieldName = nameTrait + "_delegate$" + methodName + round;
                 SWTransformThreadLocals.setTransformer(instance);
@@ -103,13 +98,13 @@ public class MultipleInterceptorTest extends AbstractRetransformTest {
                         ))
                         .method(ElementMatchers.nameContainsIgnoreCase(methodName))
                         .intercept(MethodDelegation.withDefaultConfiguration()
-                                .to(new InstMethodsInter(interceptorClassName, classLoader), fieldName))
-                        ;
+                                .to(new InstMethodsInter(interceptorClassName, classLoader), fieldName));
             }
         };
 
-//        new AgentBuilder.Default()
         Instrumentation instrumentation = ByteBuddyAgent.install();
+
+//        new AgentBuilder.Default()
         newAgentBuilder(nameTrait)
                 .type(ElementMatchers.named(className))
                 .transform(transformer1)
