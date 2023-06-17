@@ -38,11 +38,13 @@ import org.apache.skywalking.apm.agent.bytebuddy.InstMethodsInter;
 import org.apache.skywalking.apm.agent.bytebuddy.Log;
 import org.apache.skywalking.apm.agent.bytebuddy.SWClassFileLocator;
 import org.apache.skywalking.apm.agent.bytebuddy.biz.BizFoo;
+import org.apache.skywalking.apm.agent.core.util.FileUtils;
 import org.junit.Assert;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.util.TraceClassVisitor;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.PrintWriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
@@ -61,6 +63,14 @@ public class AbstractInterceptTest {
     public static final String METHOD_INTERCEPTOR_CLASS = "methodInterceptorClass";
     protected List<String> nameTraits = Arrays.asList("sw2023", "sw2024");
     protected boolean deleteDuplicatedFields = false;
+    static String dumpFolder = "target/class-dump";
+
+    protected static void enableClassDump() {
+        System.setProperty("net.bytebuddy.dump", dumpFolder);
+        File dumpDir = new File(dumpFolder);
+        FileUtils.deleteDirectory(dumpDir);
+        dumpDir.mkdirs();
+    }
 
     protected static void callBizFoo(int round) {
         Log.info("-------------");
@@ -126,6 +136,8 @@ public class AbstractInterceptTest {
         String interceptorClassName = METHOD_INTERCEPTOR_CLASS + "$" + methodName + "$" + round;
         String nameTrait = getNameTrait(round);
         String fieldName = nameTrait + "_delegate$" + methodName + round;
+
+//        new AgentBuilder.Transformer.ForAdvice().advice().transform()
 
         AgentBuilder agentBuilder = newAgentBuilder(nameTrait);
         agentBuilder.type(ElementMatchers.named(className))
@@ -212,7 +224,7 @@ public class AbstractInterceptTest {
         return nameTraits.get(round - 1);
     }
 
-    protected AgentBuilder newAgentBuilder(String nameTrait) {
+    protected static AgentBuilder newAgentBuilder(String nameTrait) {
         ByteBuddy byteBuddy = new ByteBuddy()
                 .with(new SWAuxiliaryTypeNamingStrategy(nameTrait))
                 .with(new SWImplementationContextFactory(nameTrait))

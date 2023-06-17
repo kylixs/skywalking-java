@@ -18,8 +18,12 @@
 
 package org.apache.skywalking.apm.agent.core.plugin;
 
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.implementation.FixedValue;
 import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.apache.skywalking.apm.agent.core.logging.api.ILog;
@@ -28,6 +32,7 @@ import org.apache.skywalking.apm.agent.core.plugin.interceptor.ConstructorInterc
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.InstanceMethodsInterceptPoint;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.StaticMethodsInterceptPoint;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.ClassEnhancePluginDefine;
+import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.ConstructorAdvice;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.v2.InstanceMethodsInterceptV2Point;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.v2.StaticMethodsInterceptV2Point;
 import org.apache.skywalking.apm.agent.core.plugin.match.ClassMatch;
@@ -51,6 +56,8 @@ public abstract class AbstractClassEnhancePluginDefine {
      * New field name.
      */
     public static final String CONTEXT_ATTR_NAME = "_$EnhancedClassField_ws";
+
+    public static final String CONSTRUCTOR_ADVICE_CLASS = ConstructorAdvice.class.getName();
 
     /**
      * Main entrance of enhancing the class.
@@ -142,12 +149,39 @@ public abstract class AbstractClassEnhancePluginDefine {
     protected abstract DynamicType.Builder<?> enhanceClass(TypeDescription typeDescription, DynamicType.Builder<?> newClassBuilder,
                                                   ClassLoader classLoader) throws PluginException;
 
-    /**
-     * Define the {@link ClassMatch} for filtering class.
-     *
-     * @return {@link ClassMatch}
-     */
-    protected abstract ClassMatch enhanceClass();
+
+    public AgentBuilder.Transformer.ForAdvice advice(AgentBuilder.Transformer.ForAdvice transformer) {
+
+        transformer = adviceStaticMethods(transformer);
+
+        transformer = adviceConstructors(transformer);
+
+        transformer = adviceInstanceMethods(transformer);
+
+        return transformer;
+    }
+
+    private AgentBuilder.Transformer.ForAdvice adviceConstructors(AgentBuilder.Transformer.ForAdvice transformer) {
+        for (ConstructorInterceptPoint constructorsInterceptPoint : this.getConstructorsInterceptPoints()) {
+            transformer = transformer.advice(constructorsInterceptPoint.getConstructorMatcher(),
+                    createAdaptedAdviceClass(ConstructorAdvice.class, constructorsInterceptPoint.getConstructorInterceptor()).getName());
+        }
+        return transformer;
+    }
+
+    protected abstract AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer);
+
+    protected abstract AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer);
+
+    protected static Class<?> createAdaptedAdviceClass(Class<?> adviceClass, String interceptor) {
+        return new ByteBuddy()
+                .subclass(adviceClass)
+                .method(ElementMatchers.named("getInterceptorClass"))
+                .intercept(FixedValue.value(interceptor))
+                .make()
+                .load(adviceClass.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
+                .getLoaded();
+    }
 
     public ElementMatcher<? super TypeDescription> classMatcher() {
         ClassMatch match = this.enhanceClass();
@@ -158,6 +192,13 @@ public abstract class AbstractClassEnhancePluginDefine {
             return ElementMatchers.named(nameMatch.getClassName());
         }
     }
+
+    /**
+     * Define the {@link ClassMatch} for filtering class.
+     *
+     * @return {@link ClassMatch}
+     */
+    protected abstract ClassMatch enhanceClass();
 
     /**
      * Witness classname list. Why need witness classname? Let's see like this: A library existed two released versions

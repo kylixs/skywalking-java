@@ -133,7 +133,7 @@ public class SkyWalkingAgent {
 
         for (List<AbstractClassEnhancePluginDefine> pluginDefines : pluginFinder.getAllPlugins().values()) {
             agentBuilder = agentBuilder.type(pluginFinder.buildMatch(pluginDefines))
-                    .transform(new TransformerV2(pluginDefines));
+                    .transform(createTransformer(pluginDefines));
         }
         agentBuilder.installOn(instrumentation);
 
@@ -254,6 +254,14 @@ public class SkyWalkingAgent {
             }
             return builder;
         }
+    }
+
+    private static AgentBuilder.Transformer createTransformer(List<AbstractClassEnhancePluginDefine> pluginDefines) {
+        AgentBuilder.Transformer.ForAdvice transformer = new AgentBuilder.Transformer.ForAdvice();
+        for (AbstractClassEnhancePluginDefine define : pluginDefines) {
+            transformer = define.advice(transformer);
+        }
+        return transformer;
     }
 
     private static ElementMatcher.Junction<NamedElement> allSkyWalkingAgentExcludeToolkit() {

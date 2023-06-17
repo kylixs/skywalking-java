@@ -18,6 +18,7 @@
 
 package org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance;
 
+import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
@@ -55,6 +56,10 @@ import static net.bytebuddy.matcher.ElementMatchers.not;
  */
 public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePluginDefine {
     private static final ILog LOGGER = LogManager.getLogger(ClassEnhancePluginDefine.class);
+    private static final String STATIC_METHODS_ADVICE_CLASS = StaticMethodsAdvice.class.getName();
+    private static final String STATIC_METHODS_OVERRIDE_ARGS_ADVICE_CLASS = StaticMethodsOverrideArgsAdvice.class.getName();
+    private static final String INSTANCE_METHODS_ADVICE_CLASS = InstanceMethodsAdvice.class.getName();
+    private static final String INSTANCE_METHODS_OVERRIDE_ARGS_ADVICE_CLASS = InstanceMethodsOverrideArgsAdvice.class.getName();
 
     /**
      * Enhance a class to intercept constructors and class instance methods.
@@ -65,8 +70,8 @@ public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePlugi
      */
     @Override
     protected DynamicType.Builder<?> enhanceInstance(TypeDescription typeDescription,
-        DynamicType.Builder<?> newClassBuilder, ClassLoader classLoader,
-        EnhanceContext context) throws PluginException {
+                                                     DynamicType.Builder<?> newClassBuilder, ClassLoader classLoader,
+                                                     EnhanceContext context) throws PluginException {
         ConstructorInterceptPoint[] constructorInterceptPoints = getConstructorsInterceptPoints();
         InstanceMethodsInterceptPoint[] instanceMethodsInterceptPoints = getInstanceMethodsInterceptPoints();
         String enhanceOriginClassName = typeDescription.getTypeName();
@@ -100,9 +105,9 @@ public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePlugi
         if (!typeDescription.isAssignableTo(EnhancedInstance.class)) {
             if (!context.isObjectExtended()) {
                 newClassBuilder = newClassBuilder.defineField(
-                    CONTEXT_ATTR_NAME, Object.class, ACC_PRIVATE | ACC_VOLATILE)
-                                                 .implement(EnhancedInstance.class)
-                                                 .intercept(FieldAccessor.ofField(CONTEXT_ATTR_NAME));
+                                CONTEXT_ATTR_NAME, Object.class, ACC_PRIVATE | ACC_VOLATILE)
+                        .implement(EnhancedInstance.class)
+                        .intercept(FieldAccessor.ofField(CONTEXT_ATTR_NAME));
                 context.extendObjectCompleted();
             }
         }
@@ -115,15 +120,15 @@ public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePlugi
                 ElementMatcher<MethodDescription> matcher = constructorInterceptPoint.getConstructorMatcher();
                 if (isBootstrapInstrumentation()) {
                     newClassBuilder = newClassBuilder.constructor(matcher)
-                                                     .intercept(SuperMethodCall.INSTANCE.andThen(MethodDelegation.withDefaultConfiguration()
-                                                                                                                 .to(BootstrapInstrumentBoost
-                                                                                                                     .forInternalDelegateClass(constructorInterceptPoint
-                                                                                                                         .getConstructorInterceptor()))));
+                            .intercept(SuperMethodCall.INSTANCE.andThen(MethodDelegation.withDefaultConfiguration()
+                                    .to(BootstrapInstrumentBoost
+                                            .forInternalDelegateClass(constructorInterceptPoint
+                                                    .getConstructorInterceptor()))));
                 } else {
                     newClassBuilder = newClassBuilder.constructor(matcher)
-                                                     .intercept(SuperMethodCall.INSTANCE.andThen(MethodDelegation.withDefaultConfiguration()
-                                                                                                                 .to(new ConstructorInter(constructorInterceptPoint
-                                                                                                                     .getConstructorInterceptor(), classLoader), delegateNamingResolver.resolve(matcher))));
+                            .intercept(SuperMethodCall.INSTANCE.andThen(MethodDelegation.withDefaultConfiguration()
+                                    .to(new ConstructorInter(constructorInterceptPoint
+                                            .getConstructorInterceptor(), classLoader), delegateNamingResolver.resolve(matcher))));
                 }
             }
         }
@@ -144,24 +149,24 @@ public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePlugi
                 if (instanceMethodsInterceptPoint.isOverrideArgs()) {
                     if (isBootstrapInstrumentation()) {
                         newClassBuilder = newClassBuilder.method(junction)
-                                                         .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                    .withBinders(Morph.Binder.install(OverrideCallable.class))
-                                                                                    .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
+                                .intercept(MethodDelegation.withDefaultConfiguration()
+                                        .withBinders(Morph.Binder.install(OverrideCallable.class))
+                                        .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
                     } else {
                         newClassBuilder = newClassBuilder.method(junction)
-                                                         .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                    .withBinders(Morph.Binder.install(OverrideCallable.class))
-                                                                                    .to(new InstMethodsInterWithOverrideArgs(interceptor, classLoader), delegateNamingResolver.resolve(junction)));
+                                .intercept(MethodDelegation.withDefaultConfiguration()
+                                        .withBinders(Morph.Binder.install(OverrideCallable.class))
+                                        .to(new InstMethodsInterWithOverrideArgs(interceptor, classLoader), delegateNamingResolver.resolve(junction)));
                     }
                 } else {
                     if (isBootstrapInstrumentation()) {
                         newClassBuilder = newClassBuilder.method(junction)
-                                                         .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                    .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
+                                .intercept(MethodDelegation.withDefaultConfiguration()
+                                        .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
                     } else {
                         newClassBuilder = newClassBuilder.method(junction)
-                                                         .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                    .to(new InstMethodsInter(interceptor, classLoader), delegateNamingResolver.resolve(junction)));
+                                .intercept(MethodDelegation.withDefaultConfiguration()
+                                        .to(new InstMethodsInter(interceptor, classLoader), delegateNamingResolver.resolve(junction)));
                     }
                 }
             }
@@ -179,7 +184,7 @@ public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePlugi
      */
     @Override
     protected DynamicType.Builder<?> enhanceClass(TypeDescription typeDescription, DynamicType.Builder<?> newClassBuilder,
-        ClassLoader classLoader) throws PluginException {
+                                                  ClassLoader classLoader) throws PluginException {
         StaticMethodsInterceptPoint[] staticMethodsInterceptPoints = getStaticMethodsInterceptPoints();
         String enhanceOriginClassName = typeDescription.getTypeName();
         if (staticMethodsInterceptPoints == null || staticMethodsInterceptPoints.length == 0) {
@@ -197,30 +202,51 @@ public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePlugi
             if (staticMethodsInterceptPoint.isOverrideArgs()) {
                 if (isBootstrapInstrumentation()) {
                     newClassBuilder = newClassBuilder.method(junction)
-                                                     .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                .withBinders(Morph.Binder.install(OverrideCallable.class))
-                                                                                .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
+                            .intercept(MethodDelegation.withDefaultConfiguration()
+                                    .withBinders(Morph.Binder.install(OverrideCallable.class))
+                                    .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
                 } else {
                     newClassBuilder = newClassBuilder.method(junction)
-                                                     .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                .withBinders(Morph.Binder.install(OverrideCallable.class))
-                                                                                .to(new StaticMethodsInterWithOverrideArgs(interceptor), delegateNamingResolver.resolve(junction)));
+                            .intercept(MethodDelegation.withDefaultConfiguration()
+                                    .withBinders(Morph.Binder.install(OverrideCallable.class))
+                                    .to(new StaticMethodsInterWithOverrideArgs(interceptor), delegateNamingResolver.resolve(junction)));
                 }
             } else {
                 if (isBootstrapInstrumentation()) {
                     newClassBuilder = newClassBuilder.method(junction)
-                                                     .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
+                            .intercept(MethodDelegation.withDefaultConfiguration()
+                                    .to(BootstrapInstrumentBoost.forInternalDelegateClass(interceptor)));
                 } else {
                     newClassBuilder = newClassBuilder.method(junction)
-                                                     .intercept(MethodDelegation.withDefaultConfiguration()
-                                                                                .to(new StaticMethodsInter(interceptor), delegateNamingResolver.resolve(junction)));
+                            .intercept(MethodDelegation.withDefaultConfiguration()
+                                    .to(new StaticMethodsInter(interceptor), delegateNamingResolver.resolve(junction)));
                 }
             }
 
         }
 
         return newClassBuilder;
+    }
+
+    protected AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer) {
+        for (StaticMethodsInterceptPoint staticMethodsInterceptPoint : this.getStaticMethodsInterceptPoints()) {
+            Class<?> adviceClass = staticMethodsInterceptPoint.isOverrideArgs() ?
+                    StaticMethodsOverrideArgsAdvice.class : StaticMethodsAdvice.class;
+            transformer = transformer.advice(staticMethodsInterceptPoint.getMethodsMatcher(),
+                    createAdaptedAdviceClass(adviceClass, staticMethodsInterceptPoint.getMethodsInterceptor()).getName());
+        }
+        return transformer;
+    }
+
+    @Override
+    protected AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer) {
+        for (InstanceMethodsInterceptPoint instanceMethodsInterceptPoint : this.getInstanceMethodsInterceptPoints()) {
+            Class<?> adviceClass = instanceMethodsInterceptPoint.isOverrideArgs() ?
+                    InstanceMethodsOverrideArgsAdvice.class : InstanceMethodsAdvice.class;
+            transformer = transformer.advice(instanceMethodsInterceptPoint.getMethodsMatcher(),
+                    createAdaptedAdviceClass(adviceClass, instanceMethodsInterceptPoint.getMethodsInterceptor()).getName());
+        }
+        return transformer;
     }
 
     /**

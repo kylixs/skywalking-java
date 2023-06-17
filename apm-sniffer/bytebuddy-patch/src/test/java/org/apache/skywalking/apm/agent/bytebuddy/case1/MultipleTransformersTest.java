@@ -41,8 +41,6 @@ import java.security.ProtectionDomain;
 
 public class MultipleTransformersTest extends AbstractRetransformTest {
 
-    String dumpFolder = "target/class-dump";
-
     @Test
     public void test1() throws UnmodifiableClassException {
         String className = BIZ_FOO_CLASS_NAME;
@@ -142,10 +140,5 @@ public class MultipleTransformersTest extends AbstractRetransformTest {
 //        }
     }
 
-    private void enableClassDump() {
-        System.setProperty("net.bytebuddy.dump", dumpFolder);
-        File dumpDir = new File(dumpFolder);
-        FileUtils.deleteDirectory(dumpDir);
-        dumpDir.mkdirs();
-    }
+
 }

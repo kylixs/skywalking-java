@@ -17,6 +17,7 @@
 
 package org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.v2;
 
+import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
@@ -56,6 +57,9 @@ import static net.bytebuddy.matcher.ElementMatchers.not;
  * instance methods, or both, {@link ClassEnhancePluginDefineV2} will add a field of {@link Object} type.
  */
 public abstract class ClassEnhancePluginDefineV2 extends AbstractClassEnhancePluginDefine {
+
+    private static final String STATIC_METHODS_ADVICE_CLASS = StaticMethodsAdviceV2.class.getName();
+    private static final String INSTANCE_METHODS_ADVICE_CLASS = InstanceMethodsAdviceV2.class.getName();
 
     @Override
     protected DynamicType.Builder<?> enhanceClass(TypeDescription typeDescription,
@@ -198,6 +202,21 @@ public abstract class ClassEnhancePluginDefineV2 extends AbstractClassEnhancePlu
         }
 
         return newClassBuilder;
+    }
+
+    protected AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer) {
+        for (StaticMethodsInterceptV2Point staticMethodsInterceptV2Point : this.getStaticMethodsInterceptV2Points()) {
+            transformer = transformer.advice(staticMethodsInterceptV2Point.getMethodsMatcher(), STATIC_METHODS_ADVICE_CLASS);
+        }
+        return transformer;
+    }
+
+    @Override
+    protected AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer) {
+        for (InstanceMethodsInterceptV2Point instanceMethodsInterceptPoint : this.getInstanceMethodsInterceptV2Points()) {
+            transformer = transformer.advice(instanceMethodsInterceptPoint.getMethodsMatcher(), INSTANCE_METHODS_ADVICE_CLASS);
+        }
+        return transformer;
     }
 
     @Override

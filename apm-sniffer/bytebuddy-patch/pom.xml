@@ -32,6 +32,7 @@
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
+        <byte-buddy.version>1.14.4</byte-buddy.version>
     </properties>
 
     <dependencies>
@@ -43,12 +44,12 @@
         <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy</artifactId>
-<!--            <version>1.14.6-SNAPSHOT</version>-->
+            <version>${byte-buddy.version}</version>
         </dependency>
         <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy-agent</artifactId>
-<!--            <version>1.14.6-SNAPSHOT</version>-->
+            <version>${byte-buddy.version}</version>
         </dependency>
 
         <dependency>

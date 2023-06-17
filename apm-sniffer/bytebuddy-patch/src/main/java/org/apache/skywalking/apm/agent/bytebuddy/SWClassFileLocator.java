@@ -38,9 +38,14 @@ public class SWClassFileLocator implements ClassFileLocator {
     private final ForInstrumentation.ClassLoadingDelegate classLoadingDelegate;
     private Instrumentation instrumentation;
     private ClassLoader classLoader;
-    private String typeNameTrait = "auxiliary$";
+    private String[] typeNameTraits = {"auxiliary$", "ByteBuddy$"};
     private BlockingQueue<ResolutionFutureTask> queue = new LinkedBlockingDeque<>();
     private Thread thread;
+
+    public SWClassFileLocator(Instrumentation instrumentation, ClassLoader classLoader, String[] typeNameTraits) {
+        this(instrumentation, classLoader);
+        this.typeNameTraits = typeNameTraits;
+    }
 
     public SWClassFileLocator(Instrumentation instrumentation, ClassLoader classLoader) {
         this.instrumentation = instrumentation;
@@ -69,7 +74,7 @@ public class SWClassFileLocator implements ClassFileLocator {
 
     @Override
     public Resolution locate(String name) throws IOException {
-        if (!name.contains(typeNameTrait)) {
+        if (!match(name)) {
             return new Resolution.Illegal(name);
         }
         // get class binary representation in a clean thread, avoiding nest calling transformer!
@@ -80,6 +85,17 @@ public class SWClassFileLocator implements ClassFileLocator {
         } catch (Exception e) {
             throw new IOException(e);
         }
+    }
+
+    private boolean match(String name) {
+        boolean matched = false;
+        for (String typeNameTrait : typeNameTraits) {
+            if (name.contains(typeNameTrait)) {
+                matched = true;
+                break;
+            }
+        }
+        return matched;
     }
 
     private Resolution getResolution(String name) {
