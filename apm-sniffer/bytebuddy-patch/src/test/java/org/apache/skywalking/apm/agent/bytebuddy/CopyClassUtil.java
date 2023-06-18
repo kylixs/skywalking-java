@@ -5,6 +5,7 @@ import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.method.MethodList;
 import net.bytebuddy.description.method.ParameterDescription;
 import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.description.type.TypeList;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.FixedValue;
@@ -17,7 +18,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClassUtil {
+public class CopyClassUtil {
 
     public static final String GET_INTERCEPTOR_CLASS_METHOD = "getInterceptorClass";
 
@@ -26,6 +27,7 @@ public class ClassUtil {
         TypeDescription originalType = TypePool.Default.ofSystemLoader().describe(originalClass.getName()).resolve();
         MethodList<MethodDescription.InDefinedShape> staticMethods = originalType.getDeclaredMethods().filter(MethodDescription::isStatic);
         Annotation[] classAnnotations = originalType.getDeclaredAnnotations().toArray(new Annotation[0]);
+        TypeList.Generic interfaces = originalType.getInterfaces();
 
         ClassLoader classLoader = originalClass.getClassLoader();
         String newClassName = originalClass.getName() + "$" + suffix;
@@ -33,6 +35,7 @@ public class ClassUtil {
         DynamicType.Builder<Object> builder = new ByteBuddy()
                 .subclass(Object.class)
                 .name(newClassName)
+                .implement(interfaces)
                 .annotateType(classAnnotations)
                 .modifiers(Modifier.STATIC);
 
@@ -76,7 +79,7 @@ public class ClassUtil {
 
     private static Class<?> getParameterClass(ClassLoader classLoader, ParameterDescription pd) throws ClassNotFoundException {
         String typeName = pd.getType().getTypeName();
-        // TODO convert type
+        // convert type
         if ("[Ljava.lang.Object;".equals(typeName)) {
             return Object[].class;
         }

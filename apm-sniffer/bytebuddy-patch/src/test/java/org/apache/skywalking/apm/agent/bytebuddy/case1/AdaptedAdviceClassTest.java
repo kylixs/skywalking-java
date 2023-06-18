@@ -8,12 +8,13 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
+import org.apache.skywalking.apm.agent.bytebuddy.BytecodeUtils;
 import org.apache.skywalking.apm.agent.bytebuddy.SWClassFileLocator;
+import org.junit.Assert;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
-
-import static org.apache.skywalking.apm.agent.bytebuddy.ClassUtil.createAdaptedAdviceClass;
+import java.util.concurrent.TimeUnit;
 
 public class AdaptedAdviceClassTest extends AbstractInterceptTest {
 
@@ -28,7 +29,9 @@ public class AdaptedAdviceClassTest extends AbstractInterceptTest {
                 .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
                         {
                             try {
-                                Class<?> adviceClass = createAdaptedAdviceClass(MyAdvice.class, MyAdviceSupport.class, "MyClassInterceptor");
+                                // Class<?> adviceClass = createAdaptedAdviceClass(MyAdvice.class, MyAdviceSupport.class, "MyClassInterceptor");
+                                Class<?> adviceClass = BytecodeUtils.replaceConstant(MyAdvice.class, MyAdvice.INTERCEPTOR_CLASS,
+                                        "MyClassInterceptor", MyAdvice.class.getName() + "$" + "MyClassInterceptor");
                                 return builder.method(ElementMatchers.named("sayHello"))
                                         .intercept(Advice.to(adviceClass, new SWClassFileLocator(instrumentation, adviceClass.getClassLoader(), new String[]{"$"})));
                             } catch (Exception e) {
@@ -48,10 +51,17 @@ public class AdaptedAdviceClassTest extends AbstractInterceptTest {
         System.out.println();
         str = instance.sayHello("Joe");
         System.out.println("result: " + str);
+        Assert.assertEquals("override arg failed", str, "Hi, Joe boy");
 
-        System.out.println();
-        str = instance.sayHello("Cat");
-        System.out.println("result: " + str);
+        try {
+            System.out.println();
+            str = instance.sayHello("Cat");
+            System.out.println("result: " + str);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        TimeUnit.HOURS.sleep(1);
     }
 
     public static class MyClass {
@@ -66,12 +76,16 @@ public class AdaptedAdviceClassTest extends AbstractInterceptTest {
 
     public static class MyAdvice {
 
+        private static final String INTERCEPTOR_CLASS = "INTERCEPTOR_CLASS";
+
         @Advice.OnMethodEnter(skipOn = Advice.OnDefaultValue.class, skipOnIndex = 1)
         public static Object[] enter(@Advice.Origin Method method,
                                      @Advice.This Object target,
-                                     @Advice.AllArguments(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] allArguments,
-                                     @Advice.Unused String interceptorClass) {
-            return MyAdviceSupport.enter(method, target, allArguments, interceptorClass);
+                                     @Advice.AllArguments(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] allArguments) {
+            Object[] argsRef = allArguments;
+            Object[] objects = MyAdviceSupport.enter(method, target, argsRef, INTERCEPTOR_CLASS);
+            allArguments = argsRef;
+            return objects;
         }
 
         @Advice.OnMethodExit(onThrowable = Throwable.class)
@@ -81,7 +95,12 @@ public class AdaptedAdviceClassTest extends AbstractInterceptTest {
                                 @Advice.Thrown Throwable throwable,
                                 @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returnObj,
                                 @Advice.Enter(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] contexts) {
+            // inline: change returnObj value
             returnObj = MyAdviceSupport.exit(method, target, allArguments, throwable, returnObj, contexts);
+        }
+
+        public static String getInterceptorClass() {
+            return INTERCEPTOR_CLASS;
         }
 
     }
@@ -91,6 +110,7 @@ public class AdaptedAdviceClassTest extends AbstractInterceptTest {
             String message = (String) allArguments[0];
             System.out.println(String.format("Before method, arg: %s, interceptorClass: %s", message, interceptorClass));
 
+            allArguments[0] = message + " boy";
             MyContext context = new MyContext();
             context.setInterceptorClass(interceptorClass);
 
@@ -107,7 +127,8 @@ public class AdaptedAdviceClassTest extends AbstractInterceptTest {
             }
         }
 
-        public static Object exit(Method method, Object target, Object[] allArguments, Throwable throwable, Object returnObj, Object[] contexts) {
+        public static Object exit(Method method, Object target, Object[] allArguments, Throwable throwable, Object returnObj,
+                                  Object[] contexts) {
             MyContext context = (MyContext) contexts[0];
             if (throwable != null) {
                 System.out.println("Thrown on method: " + throwable);
