@@ -41,6 +41,7 @@ public class SWClassFileLocator implements ClassFileLocator {
     private String[] typeNameTraits = {"auxiliary$", "ByteBuddy$"};
     private BlockingQueue<ResolutionFutureTask> queue = new LinkedBlockingDeque<>();
     private Thread thread;
+    private int timeoutSeconds = 2;
 
     public SWClassFileLocator(Instrumentation instrumentation, ClassLoader classLoader, String[] typeNameTraits) {
         this(instrumentation, classLoader);
@@ -81,7 +82,7 @@ public class SWClassFileLocator implements ClassFileLocator {
         ResolutionFutureTask futureTask = new ResolutionFutureTask(name);
         queue.offer(futureTask);
         try {
-            return futureTask.getFuture().get(2, TimeUnit.SECONDS);
+            return futureTask.getFuture().get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (Exception e) {
             throw new IOException(e);
         }
@@ -99,7 +100,7 @@ public class SWClassFileLocator implements ClassFileLocator {
     }
 
     private Resolution getResolution(String name) {
-        ExtractionClassFileTransformer classFileTransformer = new ExtractionClassFileTransformer(classLoader, name);
+        ExtractionClassFileTransformer classFileTransformer = new ExtractionClassFileTransformer(name);
         try {
             instrumentation.addTransformer(classFileTransformer, true);
             try {
@@ -138,6 +139,14 @@ public class SWClassFileLocator implements ClassFileLocator {
     public void close() throws IOException {
         queue.clear();
         thread.interrupt();
+    }
+
+    public int getTimeoutSeconds() {
+        return timeoutSeconds;
+    }
+
+    public void setTimeoutSeconds(int timeoutSeconds) {
+        this.timeoutSeconds = timeoutSeconds;
     }
 
     private class ResolutionFutureTask {
