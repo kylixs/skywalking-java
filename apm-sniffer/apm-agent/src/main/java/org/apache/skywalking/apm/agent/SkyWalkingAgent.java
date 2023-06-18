@@ -61,6 +61,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static net.bytebuddy.jar.asm.Opcodes.ACC_PRIVATE;
 import static net.bytebuddy.jar.asm.Opcodes.ACC_VOLATILE;
@@ -139,7 +141,10 @@ public class SkyWalkingAgent {
         }
 
         SWClassFileLocator classFileLocator = new SWClassFileLocator(instrumentation, SkyWalkingAgent.class.getClassLoader());
-        agentBuilder = agentBuilder.with(classFileLocator);
+        ElementMatcher<? super TypeDescription> typeMatcher = pluginFinder.buildMatch();
+        agentBuilder = agentBuilder.with(classFileLocator)
+                .type(typeMatcher)
+                .transform(getEnhancedInstanceTransformer(typeMatcher, pluginFinder));
 
         for (List<AbstractClassEnhancePluginDefine> pluginDefines : pluginFinder.getAllPlugins().values()) {
             agentBuilder = agentBuilder.type(pluginFinder.buildMatch(pluginDefines))
@@ -266,17 +271,44 @@ public class SkyWalkingAgent {
     }
 
     private static AgentBuilder.Transformer createTransformer(List<AbstractClassEnhancePluginDefine> pluginDefines, ClassFileLocator classFileLocator) {
-        AgentBuilder.Transformer.ForAdvice transformer = new ExtForAdvice(classFileLocator) {
+        AgentBuilder.Transformer.ForAdvice baseTransformer = new ExtForAdvice(classFileLocator);
+        List<AgentBuilder.Transformer> defineTransformers = new ArrayList<>();
+        for (AbstractClassEnhancePluginDefine define : pluginDefines) {
+            AgentBuilder.Transformer.ForAdvice transformer1 = define.advice(baseTransformer);
+            defineTransformers.add(new AgentBuilder.Transformer() {
+                private Map<String, Boolean> handledClasses = new ConcurrentHashMap<>();
+
+                @Override
+                public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, ProtectionDomain protectionDomain) {
+                    // avoid repeat transform same class
+                    if (handledClasses.putIfAbsent(typeDescription.getTypeName(), true) == null) {
+                        return transformer1.transform(builder, typeDescription, classLoader, module, protectionDomain);
+                    }
+                    return builder;
+                }
+            });
+        }
+
+        AgentBuilder.Transformer compoundTransformer = new AgentBuilder.Transformer() {
+            @Override
+            public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, ProtectionDomain protectionDomain) {
+                for (AgentBuilder.Transformer transformer : defineTransformers) {
+                    builder = transformer.transform(builder, typeDescription, classLoader, module, protectionDomain);
+                }
+                return builder;
+            }
+        };
+        return compoundTransformer;
+    }
+
+    private static AgentBuilder.Transformer getEnhancedInstanceTransformer(ElementMatcher<? super TypeDescription> typeMatcher, PluginFinder pluginFinder) {
+        return new AgentBuilder.Transformer() {
+            private Map<String, Boolean> enhancedInstanceClassMap = new ConcurrentHashMap<>();
+
             @Override
             public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, ProtectionDomain protectionDomain) {
 
-                boolean matched = false;
-                for (AbstractClassEnhancePluginDefine define : pluginDefines) {
-                    if (define.classMatcher().matches(typeDescription)) {
-                        matched = true;
-                    }
-                }
-                if (!matched) {
+                if (!typeMatcher.matches(typeDescription)) {
                     return builder;
                 }
 
@@ -291,20 +323,22 @@ public class SkyWalkingAgent {
                  *
                  */
                 if (!typeDescription.isAssignableTo(EnhancedInstance.class)) {
-                    builder = builder.defineField(
-                                    CONTEXT_ATTR_NAME, Object.class, ACC_PRIVATE | ACC_VOLATILE)
-                            .implement(EnhancedInstance.class)
-                            .intercept(FieldAccessor.ofField(CONTEXT_ATTR_NAME));
-                }
+                    AtomicBoolean doit = new AtomicBoolean(false);
+                    enhancedInstanceClassMap.computeIfAbsent(typeDescription.getTypeName(), k -> {
+                        doit.set(true);
+                        return true;
+                    });
 
-                return super.transform(builder, typeDescription, classLoader, module, protectionDomain);
+                    if (doit.get()) {
+                        builder = builder.defineField(
+                                        CONTEXT_ATTR_NAME, Object.class, ACC_PRIVATE | ACC_VOLATILE)
+                                .implement(EnhancedInstance.class)
+                                .intercept(FieldAccessor.ofField(CONTEXT_ATTR_NAME));
+                    }
+                }
+                return builder;
             }
         };
-
-        for (AbstractClassEnhancePluginDefine define : pluginDefines) {
-            transformer = define.advice(transformer);
-        }
-        return transformer;
     }
 
     private static ElementMatcher.Junction<NamedElement> allSkyWalkingAgentExcludeToolkit() {
