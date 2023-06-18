@@ -20,7 +20,6 @@ package org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance;
 
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
-import org.apache.skywalking.apm.agent.core.boot.AgentPackageNotFoundException;
 import org.apache.skywalking.apm.agent.core.logging.api.ILog;
 import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
 import org.apache.skywalking.apm.agent.core.plugin.loader.InterceptorInstanceLoader;
@@ -29,27 +28,31 @@ import java.lang.reflect.Method;
 
 public class StaticMethodsAdvice {
 
+    public static final String INTERCEPTOR_CLASS = "INTERCEPTOR_CLASS";
+
     private static final ILog LOGGER = LogManager.getLogger(StaticMethodsAdvice.class);
 
-    @Advice.OnMethodEnter(inline = false, skipOn = Advice.OnDefaultValue.class, skipOnIndex = 1)
+    @Advice.OnMethodEnter(skipOn = Advice.OnDefaultValue.class, skipOnIndex = 1)
     public static Object[] enter(@Advice.Origin Class<?> clazz,
                                  @Advice.Origin Method method,
                                  @Advice.AllArguments Object[] allArguments) throws Exception {
-        return onEnter(clazz, method, allArguments);
+        return onEnter(clazz, method, allArguments, INTERCEPTOR_CLASS);
     }
 
-    @Advice.OnMethodExit(inline = false, onThrowable = Throwable.class)
+    @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void exit(@Advice.Origin Class<?> clazz,
                             @Advice.Origin Method method,
                             @Advice.AllArguments Object[] allArguments,
                             @Advice.Thrown Throwable throwable,
                             @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returnObj,
                             @Advice.Enter(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] contexts) throws Throwable {
-        returnObj = onExit(clazz, method, allArguments, throwable, returnObj, (MethodInterceptResult) contexts[0]);
+
+        // inline change return value
+        returnObj = onExit(clazz, method, allArguments, throwable, returnObj, (MethodInterceptResult) contexts[0], INTERCEPTOR_CLASS);
     }
 
-    public static Object[] onEnter(Class<?> clazz, Method method, Object[] allArguments) throws IllegalAccessException, InstantiationException, ClassNotFoundException, AgentPackageNotFoundException {
-        StaticMethodsAroundInterceptor interceptor = InterceptorInstanceLoader.load(getInterceptorClass(), clazz
+    public static Object[] onEnter(Class<?> clazz, Method method, Object[] allArguments, String interceptorClass) throws Exception {
+        StaticMethodsAroundInterceptor interceptor = InterceptorInstanceLoader.load(interceptorClass, clazz
                 .getClassLoader());
         MethodInterceptResult result = new MethodInterceptResult();
 
@@ -66,11 +69,12 @@ public class StaticMethodsAdvice {
         }
     }
 
-    public static Object onExit(Class<?> clazz, Method method, Object[] allArguments, Throwable throwable, Object returnObj, MethodInterceptResult interceptResult) throws Throwable {
+    public static Object onExit(Class<?> clazz, Method method, Object[] allArguments, Throwable throwable, Object returnObj,
+                                MethodInterceptResult interceptResult, String interceptorClass) throws Throwable {
         if (!interceptResult.isContinue()) {
             returnObj = interceptResult._ret();
         }
-        StaticMethodsAroundInterceptor interceptor = InterceptorInstanceLoader.load(getInterceptorClass(), clazz
+        StaticMethodsAroundInterceptor interceptor = InterceptorInstanceLoader.load(interceptorClass, clazz
                 .getClassLoader());
 
         if (throwable != null) {
@@ -90,7 +94,4 @@ public class StaticMethodsAdvice {
         return returnObj;
     }
 
-    public static String getInterceptorClass() {
-        return null;
-    }
 }

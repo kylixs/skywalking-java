@@ -19,16 +19,32 @@
 package org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance;
 
 import net.bytebuddy.asm.Advice;
-
-import java.lang.reflect.Method;
+import org.apache.skywalking.apm.agent.core.logging.api.ILog;
+import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
+import org.apache.skywalking.apm.agent.core.plugin.loader.InterceptorInstanceLoader;
 
 public class ConstructorAdvice {
 
-    @Advice.OnMethodExit(inline = false)
-    public static void onExit(@Advice.This Object target,
-                              @Advice.Origin Method method,
-                              @Advice.AllArguments Object[] args) throws Exception {
+    public static final String INTERCEPTOR_CLASS = "INTERCEPTOR_CLASS";
 
+    private static final ILog LOGGER = LogManager.getLogger(StaticMethodsAdvice.class);
+
+    @Advice.OnMethodExit
+    public static void exit(@Advice.This Object objInst,
+                            @Advice.AllArguments Object[] allArguments) throws Exception {
+
+        onConstruct((EnhancedInstance) objInst, allArguments, INTERCEPTOR_CLASS);
     }
 
+    public static void onConstruct(EnhancedInstance objInst, Object[] allArguments, String interceptorClass) throws Exception {
+        Class<?> clazz = objInst.getClass();
+        InstanceConstructorInterceptor interceptor = InterceptorInstanceLoader.load(interceptorClass, clazz
+                .getClassLoader());
+
+        try {
+            interceptor.onConstruct(objInst, allArguments);
+        } catch (Throwable t) {
+            LOGGER.error("ConstructorInter failure.", t);
+        }
+    }
 }

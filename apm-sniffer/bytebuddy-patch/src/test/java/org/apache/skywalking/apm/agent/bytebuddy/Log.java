@@ -28,6 +28,11 @@ public class Log {
         PRINT.println(msg);
     }
 
+    public static void info(String msg, Object... args) {
+        msg = msg.replaceAll("\\{\\}", "%s");
+        info(String.format(msg, args));
+    }
+
     public static void info(int msg) {
         PRINT.println(msg);
     }

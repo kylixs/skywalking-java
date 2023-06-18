@@ -18,23 +18,18 @@
 
 package org.apache.skywalking.apm.agent;
 
-import java.lang.instrument.Instrumentation;
-import java.security.ProtectionDomain;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.agent.builder.AgentBuilder;
+import net.bytebuddy.agent.builder.ExtForAdvice;
 import net.bytebuddy.agent.builder.NativeMethodStrategySupport;
 import net.bytebuddy.agent.builder.SWAsmVisitorWrapper;
 import net.bytebuddy.agent.builder.SWTransformThreadLocals;
 import net.bytebuddy.description.NamedElement;
 import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.scaffold.TypeValidation;
+import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.SWAuxiliaryTypeNamingStrategy;
 import net.bytebuddy.implementation.SWImplementationContextFactory;
 import net.bytebuddy.matcher.ElementMatcher;
@@ -56,11 +51,23 @@ import org.apache.skywalking.apm.agent.core.plugin.PluginException;
 import org.apache.skywalking.apm.agent.core.plugin.PluginFinder;
 import org.apache.skywalking.apm.agent.core.plugin.bootstrap.BootstrapInstrumentBoost;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.DelegateNamingResolver;
+import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.EnhancedInstance;
 import org.apache.skywalking.apm.agent.core.plugin.jdk9module.JDK9ModuleExporter;
 
+import java.lang.instrument.Instrumentation;
+import java.security.ProtectionDomain;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+import static net.bytebuddy.jar.asm.Opcodes.ACC_PRIVATE;
+import static net.bytebuddy.jar.asm.Opcodes.ACC_VOLATILE;
 import static net.bytebuddy.matcher.ElementMatchers.nameContains;
 import static net.bytebuddy.matcher.ElementMatchers.nameStartsWith;
 import static net.bytebuddy.matcher.ElementMatchers.not;
+import static org.apache.skywalking.apm.agent.core.plugin.AbstractClassEnhancePluginDefine.CONTEXT_ATTR_NAME;
 
 /**
  * The main entrance of sky-walking agent, based on javaagent mechanism.
@@ -131,9 +138,12 @@ public class SkyWalkingAgent {
             return;
         }
 
+        SWClassFileLocator classFileLocator = new SWClassFileLocator(instrumentation, SkyWalkingAgent.class.getClassLoader());
+        agentBuilder = agentBuilder.with(classFileLocator);
+
         for (List<AbstractClassEnhancePluginDefine> pluginDefines : pluginFinder.getAllPlugins().values()) {
             agentBuilder = agentBuilder.type(pluginFinder.buildMatch(pluginDefines))
-                    .transform(createTransformer(pluginDefines));
+                    .transform(createTransformer(pluginDefines, classFileLocator));
         }
         agentBuilder.installOn(instrumentation);
 
@@ -161,7 +171,6 @@ public class SkyWalkingAgent {
         NativeMethodStrategySupport.inject(agentBuilder, nameTrait);
 
         agentBuilder = agentBuilder.with(AgentBuilder.DescriptionStrategy.Default.POOL_FIRST)
-                .with(new SWClassFileLocator(instrumentation, SkyWalkingAgent.class.getClassLoader()))
                 .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
                 .with(new RedefinitionListener())
                 .with(new Listener());
@@ -256,8 +265,42 @@ public class SkyWalkingAgent {
         }
     }
 
-    private static AgentBuilder.Transformer createTransformer(List<AbstractClassEnhancePluginDefine> pluginDefines) {
-        AgentBuilder.Transformer.ForAdvice transformer = new AgentBuilder.Transformer.ForAdvice();
+    private static AgentBuilder.Transformer createTransformer(List<AbstractClassEnhancePluginDefine> pluginDefines, ClassFileLocator classFileLocator) {
+        AgentBuilder.Transformer.ForAdvice transformer = new ExtForAdvice(classFileLocator) {
+            @Override
+            public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module, ProtectionDomain protectionDomain) {
+
+                boolean matched = false;
+                for (AbstractClassEnhancePluginDefine define : pluginDefines) {
+                    if (define.classMatcher().matches(typeDescription)) {
+                        matched = true;
+                    }
+                }
+                if (!matched) {
+                    return builder;
+                }
+
+                /**
+                 * Manipulate class source code.<br/>
+                 *
+                 * new class need:<br/>
+                 * 1.Add field, name {@link #CONTEXT_ATTR_NAME}.
+                 * 2.Add a field accessor for this field.
+                 *
+                 * And make sure the source codes manipulation only occurs once.
+                 *
+                 */
+                if (!typeDescription.isAssignableTo(EnhancedInstance.class)) {
+                    builder = builder.defineField(
+                                    CONTEXT_ATTR_NAME, Object.class, ACC_PRIVATE | ACC_VOLATILE)
+                            .implement(EnhancedInstance.class)
+                            .intercept(FieldAccessor.ofField(CONTEXT_ATTR_NAME));
+                }
+
+                return super.transform(builder, typeDescription, classLoader, module, protectionDomain);
+            }
+        };
+
         for (AbstractClassEnhancePluginDefine define : pluginDefines) {
             transformer = define.advice(transformer);
         }
@@ -271,7 +314,9 @@ public class SkyWalkingAgent {
     private static class Listener implements AgentBuilder.Listener {
         @Override
         public void onDiscovery(String typeName, ClassLoader classLoader, JavaModule module, boolean loaded) {
-
+            if (LOGGER.isDebugEnable()) {
+                LOGGER.debug("On Discovery class: {}, loaded: {}", typeName, loaded);
+            }
         }
 
         @Override

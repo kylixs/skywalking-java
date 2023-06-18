@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package org.apache.skywalking.apm.agent.bytebuddy.case1;
 
 import net.bytebuddy.agent.ByteBuddyAgent;
@@ -8,6 +26,7 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
+import org.apache.skywalking.apm.agent.bytebuddy.Log;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
@@ -30,20 +49,20 @@ public class AdviceSkipOnTest {
 
         MyClass instance = new MyClass();
         String str = instance.sayHello("Tom");
-        System.out.println("result: " + str);
+        Log.info("result: " + str);
 
-        System.out.println();
+        Log.info("");
         str = instance.sayHello("Joe");
-        System.out.println("result: " + str);
+        Log.info("result: " + str);
 
-        System.out.println();
+        Log.info("");
         str = instance.sayHello("Cat");
-        System.out.println("result: " + str);
+        Log.info("result: " + str);
     }
 
     public static class MyClass {
         public String sayHello(String message) {
-            System.out.println("Execute origin method, arg: " + message);
+            Log.info("Execute origin method, arg: " + message);
             if (message.contains("Cat")) {
                 throw new IllegalArgumentException("Invalid");
             }
@@ -62,7 +81,7 @@ public class AdviceSkipOnTest {
 
         public static Object[] onEnter(Object[] allArguments) {
             String message = (String) allArguments[0];
-            System.out.println("Before method, arg:" + message);
+            Log.info("Before method, arg:" + message);
 
             MyContext context = new MyContext();
             // Do something special ..
@@ -89,13 +108,13 @@ public class AdviceSkipOnTest {
 
         public static Object onExit(Object target, Object[] allArguments, Object returnObj, Throwable throwable, MyContext context) {
             if (throwable != null) {
-                System.out.println("Thrown on method: " + throwable);
+                Log.info("Thrown on method: " + throwable);
             } else {
                 if (context.isSkip()) {
                     returnObj = context.value;
-                    System.out.println("Skip origin method and set return value: " + returnObj);
+                    Log.info("Skip origin method and set return value: " + returnObj);
                 } else {
-                    System.out.println("Exit method with return value: " + returnObj);
+                    Log.info("Exit method with return value: " + returnObj);
                 }
             }
             return returnObj;

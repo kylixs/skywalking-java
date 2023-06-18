@@ -18,14 +18,14 @@
 
 package org.apache.skywalking.apm.agent.core.plugin;
 
-import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.agent.builder.AgentBuilder;
+import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
-import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
-import net.bytebuddy.implementation.FixedValue;
 import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
+import net.bytebuddy.utility.RandomString;
+import org.apache.skywalking.apm.agent.bytebuddy.util.BytecodeUtils;
 import org.apache.skywalking.apm.agent.core.logging.api.ILog;
 import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.ConstructorInterceptPoint;
@@ -33,6 +33,7 @@ import org.apache.skywalking.apm.agent.core.plugin.interceptor.InstanceMethodsIn
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.StaticMethodsInterceptPoint;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.ClassEnhancePluginDefine;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.ConstructorAdvice;
+import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.StaticMethodsAdvice;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.v2.InstanceMethodsInterceptV2Point;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.v2.StaticMethodsInterceptV2Point;
 import org.apache.skywalking.apm.agent.core.plugin.match.ClassMatch;
@@ -57,8 +58,6 @@ public abstract class AbstractClassEnhancePluginDefine {
      */
     public static final String CONTEXT_ATTR_NAME = "_$EnhancedClassField_ws";
 
-    public static final String CONSTRUCTOR_ADVICE_CLASS = ConstructorAdvice.class.getName();
-
     /**
      * Main entrance of enhancing the class.
      *
@@ -69,12 +68,29 @@ public abstract class AbstractClassEnhancePluginDefine {
      * @throws PluginException when set builder failure.
      */
     public DynamicType.Builder<?> define(TypeDescription typeDescription, DynamicType.Builder<?> builder,
-        ClassLoader classLoader, EnhanceContext context) throws PluginException {
+                                         ClassLoader classLoader, EnhanceContext context) throws PluginException {
         String interceptorDefineClassName = this.getClass().getName();
         String transformClassName = typeDescription.getTypeName();
+        if (checkEnabled(classLoader, transformClassName)) {
+            return null;
+        }
+
+        /**
+         * find origin class source code for interceptor
+         */
+        DynamicType.Builder<?> newClassBuilder = this.enhance(typeDescription, builder, classLoader, context);
+
+        context.initializationStageCompleted();
+        LOGGER.debug("enhance class {} by {} completely.", transformClassName, interceptorDefineClassName);
+
+        return newClassBuilder;
+    }
+
+    public boolean checkEnabled(ClassLoader classLoader, String transformClassName) {
+        String interceptorDefineClassName = this.getClass().getName();
         if (StringUtil.isEmpty(transformClassName)) {
             LOGGER.warn("classname of being intercepted is not defined by {}.", interceptorDefineClassName);
-            return null;
+            return false;
         }
 
         LOGGER.debug("prepare to enhance class {} by {}.", transformClassName, interceptorDefineClassName);
@@ -87,7 +103,7 @@ public abstract class AbstractClassEnhancePluginDefine {
             for (String witnessClass : witnessClasses) {
                 if (!finder.exist(witnessClass, classLoader)) {
                     LOGGER.warn("enhance class {} by plugin {} is not activated. Witness class {} does not exist.", transformClassName, interceptorDefineClassName, witnessClass);
-                    return null;
+                    return false;
                 }
             }
         }
@@ -96,20 +112,11 @@ public abstract class AbstractClassEnhancePluginDefine {
             for (WitnessMethod witnessMethod : witnessMethods) {
                 if (!finder.exist(witnessMethod, classLoader)) {
                     LOGGER.warn("enhance class {} by plugin {} is not activated. Witness method {} does not exist.", transformClassName, interceptorDefineClassName, witnessMethod);
-                    return null;
+                    return false;
                 }
             }
         }
-
-        /**
-         * find origin class source code for interceptor
-         */
-        DynamicType.Builder<?> newClassBuilder = this.enhance(typeDescription, builder, classLoader, context);
-
-        context.initializationStageCompleted();
-        LOGGER.debug("enhance class {} by {} completely.", transformClassName, interceptorDefineClassName);
-
-        return newClassBuilder;
+        return true;
     }
 
     /**
@@ -136,8 +143,8 @@ public abstract class AbstractClassEnhancePluginDefine {
      * @return new byte-buddy's builder for further manipulation.
      */
     protected abstract DynamicType.Builder<?> enhanceInstance(TypeDescription typeDescription,
-                                                     DynamicType.Builder<?> newClassBuilder, ClassLoader classLoader,
-                                                     EnhanceContext context) throws PluginException;
+                                                              DynamicType.Builder<?> newClassBuilder, ClassLoader classLoader,
+                                                              EnhanceContext context) throws PluginException;
 
     /**
      * Enhance a class to intercept class static methods.
@@ -147,40 +154,53 @@ public abstract class AbstractClassEnhancePluginDefine {
      * @return new byte-buddy's builder for further manipulation.
      */
     protected abstract DynamicType.Builder<?> enhanceClass(TypeDescription typeDescription, DynamicType.Builder<?> newClassBuilder,
-                                                  ClassLoader classLoader) throws PluginException;
+                                                           ClassLoader classLoader) throws PluginException;
 
+    /**
+     * Begin to define how to enhance class. After invoke this method, only means definition is finished.
+     *
+     * @param transformer the advice transformer of plugin
+     * @return new advice transformer
+     * @throws PluginException when set transformer failure.
+     */
+    public AgentBuilder.Transformer.ForAdvice advice(AgentBuilder.Transformer.ForAdvice transformer) throws PluginException {
 
-    public AgentBuilder.Transformer.ForAdvice advice(AgentBuilder.Transformer.ForAdvice transformer) {
+        try {
+            transformer = adviceStaticMethods(transformer);
 
-        transformer = adviceStaticMethods(transformer);
+            transformer = adviceConstructors(transformer);
 
-        transformer = adviceConstructors(transformer);
+            transformer = adviceInstanceMethods(transformer);
 
-        transformer = adviceInstanceMethods(transformer);
-
-        return transformer;
+            return transformer;
+        } catch (Exception e) {
+            throw new PluginException("Enhance plugin failure: " + this, e);
+        }
     }
 
-    private AgentBuilder.Transformer.ForAdvice adviceConstructors(AgentBuilder.Transformer.ForAdvice transformer) {
-        for (ConstructorInterceptPoint constructorsInterceptPoint : this.getConstructorsInterceptPoints()) {
-            transformer = transformer.advice(constructorsInterceptPoint.getConstructorMatcher(),
-                    createAdaptedAdviceClass(ConstructorAdvice.class, constructorsInterceptPoint.getConstructorInterceptor()).getName());
+    private AgentBuilder.Transformer.ForAdvice adviceConstructors(AgentBuilder.Transformer.ForAdvice transformer) throws Exception {
+        if (this.getConstructorsInterceptPoints() != null) {
+            for (ConstructorInterceptPoint constructorsInterceptPoint : this.getConstructorsInterceptPoints()) {
+                ElementMatcher.Junction<MethodDescription> junction = ElementMatchers.isConstructor()
+                        .and(constructorsInterceptPoint.getConstructorMatcher());
+                transformer = transformer.advice(junction,
+                        createAdaptedAdviceClass(ConstructorAdvice.class, constructorsInterceptPoint.getConstructorInterceptor()).getName());
+            }
         }
         return transformer;
     }
 
-    protected abstract AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer);
+    protected abstract AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer) throws Exception;
 
-    protected abstract AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer);
+    protected abstract AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer) throws Exception;
 
-    protected static Class<?> createAdaptedAdviceClass(Class<?> adviceClass, String interceptor) {
-        return new ByteBuddy()
-                .subclass(adviceClass)
-                .method(ElementMatchers.named("getInterceptorClass"))
-                .intercept(FixedValue.value(interceptor))
-                .make()
-                .load(adviceClass.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
-                .getLoaded();
+    protected static Class<?> createAdaptedAdviceClass(Class<?> adviceClass, String interceptor) throws Exception {
+        String newClassName = adviceClass.getName() + "$SW$" + RandomString.hashOf(interceptor.hashCode());
+        Class<?> aClass = BytecodeUtils.getClassCache().get(newClassName);
+        if (aClass != null) {
+            return aClass;
+        }
+        return BytecodeUtils.replaceConstant(adviceClass, StaticMethodsAdvice.INTERCEPTOR_CLASS, interceptor, newClassName);
     }
 
     public ElementMatcher<? super TypeDescription> classMatcher() {
@@ -209,7 +229,7 @@ public abstract class AbstractClassEnhancePluginDefine {
      * com.company.1.x.A, only in 1.0 ), and you can achieve the goal.
      */
     protected String[] witnessClasses() {
-        return new String[] {};
+        return new String[]{};
     }
 
     protected List<WitnessMethod> witnessMethods() {

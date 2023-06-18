@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package org.apache.skywalking.apm.agent.bytebuddy.case1;
 
 import net.bytebuddy.agent.ByteBuddyAgent;
@@ -7,6 +25,7 @@ import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
+import org.apache.skywalking.apm.agent.bytebuddy.Log;
 
 import java.lang.reflect.Method;
 
@@ -17,18 +36,16 @@ public class AdviceTransformerTest extends AbstractInterceptTest {
         enableClassDump();
 
         AgentBuilder.Transformer transformer = new AgentBuilder.Transformer.ForAdvice()
-                .include(AdviceTransformerTest.class.getClassLoader()) // 要代理的类
-                .advice(ElementMatchers.named("sayHello"), InstMethodAdvice.class.getName()) // 应用的advice
-                .advice(ElementMatchers.named("staticMethod"), StaticMethodAdvice.class.getName()); // 应用的advice
+                .include(AdviceTransformerTest.class.getClassLoader())
+                .advice(ElementMatchers.named("sayHello"), InstMethodAdvice.class.getName())
+                .advice(ElementMatchers.named("staticMethod"), StaticMethodAdvice.class.getName());
 
         new AgentBuilder.Default()
-                .type(ElementMatchers.any()) // 选择所有类型
+                .type(ElementMatchers.any())
                 .transform(transformer)
                 .transform(transformer)
                 .with(createListener())
-                .installOnByteBuddyAgent(); // 在Byte Buddy Agent上安装
-
-        // 添加其他代理逻辑或启动应用程序
+                .installOnByteBuddyAgent();
 
         new MyClass().sayHello("John");
         MyClass.staticMethod("John");
@@ -63,7 +80,6 @@ public class AdviceTransformerTest extends AbstractInterceptTest {
 
     public static class MyClass {
         public String sayHello(String name) {
-            // 在这里添加原始方法的实现
             return "HI " + name;
         }
 
@@ -78,14 +94,12 @@ public class AdviceTransformerTest extends AbstractInterceptTest {
         public static void enter(
                 @Advice.This Object target,
                 @Advice.Origin Method method) {
-            System.out.println("进入方法：" + method);
-            // 添加在方法进入时执行的逻辑
+            Log.info("enter method: " + method);
         }
 
         @Advice.OnMethodExit
         public static void exit(@Advice.Origin Method method) {
-            System.out.println("退出方法：" + method);
-            // 添加在方法退出时执行的逻辑
+            Log.info("exit method: " + method);
         }
     }
 
@@ -93,14 +107,12 @@ public class AdviceTransformerTest extends AbstractInterceptTest {
         @Advice.OnMethodEnter(inline = false)
         public static void enter(
                 @Advice.Origin Method method) {
-            System.out.println("进入方法：" + method);
-            // 添加在方法进入时执行的逻辑
+            Log.info("enter method: " + method);
         }
 
         @Advice.OnMethodExit
         public static void exit(@Advice.Origin Method method) {
-            System.out.println("退出方法：" + method);
-            // 添加在方法退出时执行的逻辑
+            Log.info("exit method: " + method);
         }
     }
 

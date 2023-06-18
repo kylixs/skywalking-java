@@ -34,7 +34,7 @@ public class ExtForAdvice extends AgentBuilder.Transformer.ForAdvice {
                 Advice.ExceptionHandler.Default.SUPPRESSING,
                 Assigner.DEFAULT,
                 classFileLocator,
-                AgentBuilder.PoolStrategy.Default.FAST,
+                AgentBuilder.PoolStrategy.Default.EXTENDED,
                 AgentBuilder.LocationStrategy.ForClassLoader.STRONG,
                 Collections.<Entry>emptyList());
     }

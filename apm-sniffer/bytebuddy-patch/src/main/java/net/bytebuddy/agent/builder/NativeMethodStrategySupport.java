@@ -18,9 +18,6 @@
 
 package net.bytebuddy.agent.builder;
 
-import org.apache.skywalking.apm.agent.core.logging.api.ILog;
-import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
-
 import java.lang.reflect.Field;
 
 /**
@@ -28,7 +25,7 @@ import java.lang.reflect.Field;
  */
 public class NativeMethodStrategySupport {
     private static final String PREFIX = "origin$";
-    private static ILog LOGGER = LogManager.getLogger(NativeMethodStrategySupport.class);
+    // private static ILog LOGGER = LogManager.getLogger(NativeMethodStrategySupport.class);
 
     public static void inject(AgentBuilder agentBuilder, String nameTrait) {
         String prefix = nameTrait + "_" + PREFIX;
@@ -41,7 +38,7 @@ public class NativeMethodStrategySupport {
             nativeMethodStrategyField.setAccessible(true);
             nativeMethodStrategyField.set(agentBuilder, new SWNativeMethodStrategy(prefix));
         } catch (Exception e) {
-            LOGGER.error(e, "SkyWalking agent inject NativeMethodStrategy failure. clazz: " + clazz.getName());
+            // TODO LOGGER.error(e, "SkyWalking agent inject NativeMethodStrategy failure. clazz: " + clazz.getName());
         }
     }
 }

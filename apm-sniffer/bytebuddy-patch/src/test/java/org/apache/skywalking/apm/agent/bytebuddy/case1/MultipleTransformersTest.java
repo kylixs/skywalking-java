@@ -31,10 +31,8 @@ import net.bytebuddy.utility.JavaModule;
 import org.apache.skywalking.apm.agent.bytebuddy.ConstructorInter;
 import org.apache.skywalking.apm.agent.bytebuddy.InstMethodsInter;
 import org.apache.skywalking.apm.agent.bytebuddy.biz.BizFoo;
-import org.apache.skywalking.apm.agent.core.util.FileUtils;
 import org.junit.Test;
 
-import java.io.File;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
 import java.security.ProtectionDomain;
@@ -139,6 +137,5 @@ public class MultipleTransformersTest extends AbstractRetransformTest {
 //            throw new RuntimeException(e);
 //        }
     }
-
 
 }

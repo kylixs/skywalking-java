@@ -25,8 +25,6 @@ import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.implementation.Implementation.SpecialMethodInvocation;
 import net.bytebuddy.implementation.auxiliary.AuxiliaryType;
 import net.bytebuddy.utility.RandomString;
-import org.apache.skywalking.apm.agent.core.logging.api.ILog;
-import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
 
 import java.lang.reflect.Field;
 
@@ -35,7 +33,7 @@ import java.lang.reflect.Field;
  */
 public class SWAuxiliaryTypeNamingStrategy implements AuxiliaryType.NamingStrategy {
     private static final String DEFAULT_SUFFIX = "auxiliary";
-    private static ILog LOGGER = LogManager.getLogger(SWAuxiliaryTypeNamingStrategy.class);
+    // private static ILog LOGGER = LogManager.getLogger(SWAuxiliaryTypeNamingStrategy.class);
     private String suffix;
 
     public SWAuxiliaryTypeNamingStrategy(String nameTrait) {
@@ -79,7 +77,7 @@ public class SWAuxiliaryTypeNamingStrategy implements AuxiliaryType.NamingStrate
                 return fieldDescription.toString();
             }
         } catch (Throwable e) {
-            LOGGER.error(e, "Find description of auxiliaryType failure. auxiliaryType: {}", auxiliaryType.getClass());
+            // TODO LOGGER.error(e, "Find description of auxiliaryType failure. auxiliaryType: {}", auxiliaryType.getClass());
         }
         return null;
     }

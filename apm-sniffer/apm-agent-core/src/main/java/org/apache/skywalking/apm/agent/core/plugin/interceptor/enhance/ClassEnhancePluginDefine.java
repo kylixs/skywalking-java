@@ -56,10 +56,6 @@ import static net.bytebuddy.matcher.ElementMatchers.not;
  */
 public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePluginDefine {
     private static final ILog LOGGER = LogManager.getLogger(ClassEnhancePluginDefine.class);
-    private static final String STATIC_METHODS_ADVICE_CLASS = StaticMethodsAdvice.class.getName();
-    private static final String STATIC_METHODS_OVERRIDE_ARGS_ADVICE_CLASS = StaticMethodsOverrideArgsAdvice.class.getName();
-    private static final String INSTANCE_METHODS_ADVICE_CLASS = InstanceMethodsAdvice.class.getName();
-    private static final String INSTANCE_METHODS_OVERRIDE_ARGS_ADVICE_CLASS = InstanceMethodsOverrideArgsAdvice.class.getName();
 
     /**
      * Enhance a class to intercept constructors and class instance methods.
@@ -228,23 +224,27 @@ public abstract class ClassEnhancePluginDefine extends AbstractClassEnhancePlugi
         return newClassBuilder;
     }
 
-    protected AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer) {
-        for (StaticMethodsInterceptPoint staticMethodsInterceptPoint : this.getStaticMethodsInterceptPoints()) {
-            Class<?> adviceClass = staticMethodsInterceptPoint.isOverrideArgs() ?
-                    StaticMethodsOverrideArgsAdvice.class : StaticMethodsAdvice.class;
-            transformer = transformer.advice(staticMethodsInterceptPoint.getMethodsMatcher(),
-                    createAdaptedAdviceClass(adviceClass, staticMethodsInterceptPoint.getMethodsInterceptor()).getName());
+    protected AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer) throws Exception {
+        if (this.getStaticMethodsInterceptPoints() != null) {
+            for (StaticMethodsInterceptPoint staticMethodsInterceptPoint : this.getStaticMethodsInterceptPoints()) {
+                Class<?> adviceClass = staticMethodsInterceptPoint.isOverrideArgs() ?
+                        StaticMethodsAdviceWithOverrideArgs.class : StaticMethodsAdvice.class;
+                transformer = transformer.advice(staticMethodsInterceptPoint.getMethodsMatcher(),
+                        createAdaptedAdviceClass(adviceClass, staticMethodsInterceptPoint.getMethodsInterceptor()).getName());
+            }
         }
         return transformer;
     }
 
     @Override
-    protected AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer) {
-        for (InstanceMethodsInterceptPoint instanceMethodsInterceptPoint : this.getInstanceMethodsInterceptPoints()) {
-            Class<?> adviceClass = instanceMethodsInterceptPoint.isOverrideArgs() ?
-                    InstanceMethodsOverrideArgsAdvice.class : InstanceMethodsAdvice.class;
-            transformer = transformer.advice(instanceMethodsInterceptPoint.getMethodsMatcher(),
-                    createAdaptedAdviceClass(adviceClass, instanceMethodsInterceptPoint.getMethodsInterceptor()).getName());
+    protected AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer) throws Exception {
+        if (this.getInstanceMethodsInterceptPoints() != null) {
+            for (InstanceMethodsInterceptPoint instanceMethodsInterceptPoint : this.getInstanceMethodsInterceptPoints()) {
+                Class<?> adviceClass = instanceMethodsInterceptPoint.isOverrideArgs() ?
+                        InstanceMethodsAdviceWithOverrideArgs.class : InstanceMethodsAdvice.class;
+                transformer = transformer.advice(instanceMethodsInterceptPoint.getMethodsMatcher(),
+                        createAdaptedAdviceClass(adviceClass, instanceMethodsInterceptPoint.getMethodsInterceptor()).getName());
+            }
         }
         return transformer;
     }

@@ -58,9 +58,6 @@ import static net.bytebuddy.matcher.ElementMatchers.not;
  */
 public abstract class ClassEnhancePluginDefineV2 extends AbstractClassEnhancePluginDefine {
 
-    private static final String STATIC_METHODS_ADVICE_CLASS = StaticMethodsAdviceV2.class.getName();
-    private static final String INSTANCE_METHODS_ADVICE_CLASS = InstanceMethodsAdviceV2.class.getName();
-
     @Override
     protected DynamicType.Builder<?> enhanceClass(TypeDescription typeDescription,
                                                   DynamicType.Builder<?> newClassBuilder,
@@ -205,16 +202,24 @@ public abstract class ClassEnhancePluginDefineV2 extends AbstractClassEnhancePlu
     }
 
     protected AgentBuilder.Transformer.ForAdvice adviceStaticMethods(AgentBuilder.Transformer.ForAdvice transformer) {
-        for (StaticMethodsInterceptV2Point staticMethodsInterceptV2Point : this.getStaticMethodsInterceptV2Points()) {
-            transformer = transformer.advice(staticMethodsInterceptV2Point.getMethodsMatcher(), STATIC_METHODS_ADVICE_CLASS);
+        if (this.getStaticMethodsInterceptV2Points() != null) {
+            for (StaticMethodsInterceptV2Point staticMethodsInterceptV2Point : this.getStaticMethodsInterceptV2Points()) {
+                Class<?> adviceClass = staticMethodsInterceptV2Point.isOverrideArgs() ?
+                        StaticMethodsAdviceV2WithOverrideArgs.class : StaticMethodsAdviceV2.class;
+                transformer = transformer.advice(staticMethodsInterceptV2Point.getMethodsMatcher(), adviceClass.getName());
+            }
         }
         return transformer;
     }
 
     @Override
     protected AgentBuilder.Transformer.ForAdvice adviceInstanceMethods(AgentBuilder.Transformer.ForAdvice transformer) {
-        for (InstanceMethodsInterceptV2Point instanceMethodsInterceptPoint : this.getInstanceMethodsInterceptV2Points()) {
-            transformer = transformer.advice(instanceMethodsInterceptPoint.getMethodsMatcher(), INSTANCE_METHODS_ADVICE_CLASS);
+        if (this.getInstanceMethodsInterceptV2Points() != null) {
+            for (InstanceMethodsInterceptV2Point instanceMethodsInterceptPoint : this.getInstanceMethodsInterceptV2Points()) {
+                Class<?> adviceClass = instanceMethodsInterceptPoint.isOverrideArgs() ?
+                        InstanceMethodsAdviceV2WithOverrideArgs.class : InstanceMethodsAdviceV2.class;
+                transformer = transformer.advice(instanceMethodsInterceptPoint.getMethodsMatcher(), adviceClass.getName());
+            }
         }
         return transformer;
     }

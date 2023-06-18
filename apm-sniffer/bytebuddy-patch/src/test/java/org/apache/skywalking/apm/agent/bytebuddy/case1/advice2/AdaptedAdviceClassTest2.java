@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package org.apache.skywalking.apm.agent.bytebuddy.case1.advice2;
 
 import net.bytebuddy.agent.ByteBuddyAgent;
@@ -9,15 +27,15 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
-import org.apache.skywalking.apm.agent.bytebuddy.BytecodeUtils;
+import org.apache.skywalking.apm.agent.bytebuddy.Log;
 import org.apache.skywalking.apm.agent.bytebuddy.SWClassFileLocator;
 import org.apache.skywalking.apm.agent.bytebuddy.case1.AbstractInterceptTest;
+import org.apache.skywalking.apm.agent.bytebuddy.util.BytecodeUtils;
 import org.junit.Assert;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 
 import static net.bytebuddy.matcher.ElementMatchers.named;
 
@@ -33,19 +51,24 @@ public class AdaptedAdviceClassTest2 extends AbstractInterceptTest {
         Instrumentation instrumentation = ByteBuddyAgent.install();
 
         String interceptorClass1 = MyClassInterceptor1.class.getName();
-        Class<?> adviceClass1 = BytecodeUtils.replaceConstant(MyAdvice.class, MyAdvice.getInterceptorClass(),
-                interceptorClass1, MyAdvice.class.getName() + "$" + interceptorClass1);
+        Class<?> adviceClass1 = BytecodeUtils.replaceConstant(InstanceMethodsAdvice.class, InstanceMethodsAdvice.getInterceptorClass(),
+                interceptorClass1, InstanceMethodsAdvice.class.getName() + "$" + interceptorClass1);
 
         String interceptorClass2 = MyClassInterceptor2.class.getName();
-        Class<?> adviceClass2 = BytecodeUtils.replaceConstant(MyAdvice.class, MyAdvice.getInterceptorClass(),
-                interceptorClass2, MyAdvice.class.getName() + "$" + interceptorClass2);
+        Class<?> adviceClass2 = BytecodeUtils.replaceConstant(InstanceMethodsAdvice.class, InstanceMethodsAdvice.getInterceptorClass(),
+                interceptorClass2, InstanceMethodsAdvice.class.getName() + "$" + interceptorClass2);
+
+        String constructorInterceptorClass1 = "constructorInterceptorClass";
+        Class<?> constructorAdviceClass1 = BytecodeUtils.replaceConstant(InstanceConstructorAdvice.class, InstanceConstructorAdvice.getInterceptorClass(),
+                constructorInterceptorClass1, InstanceMethodsAdvice.class.getName() + "$" + constructorInterceptorClass1);
 
         SWClassFileLocator classFileLocator = new SWClassFileLocator(instrumentation, adviceClass1.getClassLoader(), new String[]{"$"});
 
         // advice
         AgentBuilder.Transformer transformer = new ExtForAdvice(classFileLocator)
                 .advice(named("sayHello"), adviceClass1.getName())
-                .advice(named("sayHello"), adviceClass2.getName());
+                .advice(named("sayHello"), adviceClass2.getName())
+                .advice(ElementMatchers.isConstructor(), constructorAdviceClass1.getName());
 
         new AgentBuilder.Default()
                 .type(ElementMatchers.nameEndsWith("MyClass"))
@@ -61,23 +84,28 @@ public class AdaptedAdviceClassTest2 extends AbstractInterceptTest {
 
         MyClass instance = new MyClass();
         String str = instance.sayHello("Tom");
-        System.out.println("result: " + str);
-        Assert.assertEquals("skip origin method call failed.", str, "Reject");
+        Log.info("result: " + str);
+        Assert.assertEquals("skip origin method call failed.", "Reject: Tom", str);
 
-        System.out.println();
+        Log.info("");
+        str = instance.sayHello("User");
+        Log.info("result: " + str);
+        Assert.assertEquals("override arg failed.", "Reject: User boy", str);
+
+        Log.info("");
         str = instance.sayHello("Joe");
-        System.out.println("result: " + str);
-        Assert.assertEquals("override arg failed.", str, "Hi, Joe boy girl");
+        Log.info("result: " + str);
+        Assert.assertEquals("override arg failed.", "Hi, Joe boy girl", str);
 
         try {
-            System.out.println();
+            Log.info("");
             str = instance.sayHello("Cat");
-            System.out.println("result: " + str);
+            Log.info("result: " + str);
         } catch (Exception e) {
             e.printStackTrace();
         }
 
-        TimeUnit.HOURS.sleep(1);
+        //TimeUnit.HOURS.sleep(1);
     }
 
     private static void installInterceptor(Instrumentation instrumentation, Class<?> adviceClass1, Class<?> adviceClass2, SWClassFileLocator classFileLocator) {
@@ -139,7 +167,7 @@ public class AdaptedAdviceClassTest2 extends AbstractInterceptTest {
 
 class MyClass {
     public String sayHello(String message) {
-        System.out.println("Execute origin method, arg: " + message);
+        Log.info("Execute origin method, arg: " + message);
         if (message.contains("Cat")) {
             throw new IllegalArgumentException("Invalid");
         }
@@ -151,25 +179,25 @@ class MyClassInterceptor1 implements InstanceMethodsInterceptor {
 
     @Override
     public void beforeMethod(Object objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes, MethodInterceptResult result) throws Throwable {
-        System.out.println(String.format("MyClassInterceptor1.beforeMethod: %s, allArguments: %s", method.getName(), Arrays.asList(allArguments)));
+        Log.info(String.format("MyClassInterceptor1.beforeMethod: %s, allArguments: %s", method.getName(), Arrays.asList(allArguments)));
         String arg0 = (String) allArguments[0];
         if (arg0.contains("Tom")) {
-            result.defineReturnValue("Reject");
+            result.defineReturnValue("Reject: " + arg0);
             return;
         }
         allArguments[0] += " boy";
-        System.out.println(String.format("Change args: %s", allArguments));
+        Log.info(String.format("Change args: %s", allArguments));
     }
 
     @Override
     public Object afterMethod(Object objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes, Object ret) throws Throwable {
-        System.out.println(String.format("MyClassInterceptor1.afterMethod: %s, allArguments: %s, ret: %s", method.getName(), Arrays.asList(allArguments), ret));
+        Log.info(String.format("MyClassInterceptor1.afterMethod: %s, allArguments: %s, ret: %s", method.getName(), Arrays.asList(allArguments), ret));
         return ret;
     }
 
     @Override
     public void handleMethodException(Object objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes, Throwable t) {
-        System.out.println(String.format("MyClassInterceptor1.handleMethodException: $s, allArguments: %s, error: %s", method.getName(), Arrays.asList(allArguments), t));
+        Log.info(String.format("MyClassInterceptor1.handleMethodException: $s, allArguments: %s, error: %s", method.getName(), Arrays.asList(allArguments), t));
     }
 }
 
@@ -177,24 +205,29 @@ class MyClassInterceptor2 implements InstanceMethodsInterceptor {
 
     @Override
     public void beforeMethod(Object objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes, MethodInterceptResult result) throws Throwable {
-        System.out.println(String.format("MyClassInterceptor2.beforeMethod: %s, allArguments: %s", method.getName(), Arrays.asList(allArguments)));
+        Log.info(String.format("MyClassInterceptor2.beforeMethod: %s, allArguments: %s", method.getName(), Arrays.asList(allArguments)));
+        String arg0 = (String) allArguments[0];
+        if (arg0.contains("User")) {
+            result.defineReturnValue("Reject: " + arg0);
+            return;
+        }
         allArguments[0] += " girl";
-        System.out.println(String.format("Change args: %s", allArguments));
+        Log.info(String.format("Change args: %s", allArguments));
     }
 
     @Override
     public Object afterMethod(Object objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes, Object ret) throws Throwable {
-        System.out.println(String.format("MyClassInterceptor2.afterMethod: %s, allArguments: %s, ret: %s", method.getName(), Arrays.asList(allArguments), ret));
+        Log.info(String.format("MyClassInterceptor2.afterMethod: %s, allArguments: %s, ret: %s", method.getName(), Arrays.asList(allArguments), ret));
         return ret;
     }
 
     @Override
     public void handleMethodException(Object objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes, Throwable t) {
-        System.out.println(String.format("MyClassInterceptor2.handleMethodException: $s, allArguments: %s, error: %s", method.getName(), Arrays.asList(allArguments), t));
+        Log.info(String.format("MyClassInterceptor2.handleMethodException: $s, allArguments: %s, error: %s", method.getName(), Arrays.asList(allArguments), t));
     }
 }
 
-class MyAdvice {
+class InstanceMethodsAdvice {
 
     private static final String INTERCEPTOR_CLASS = "INTERCEPTOR_CLASS";
 
@@ -217,6 +250,22 @@ class MyAdvice {
                             @Advice.Enter(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] contexts) {
         // inline: change returnObj value
         returnObj = MyAdviceSupport.exit(method, target, allArguments, throwable, returnObj, contexts);
+    }
+
+    public static String getInterceptorClass() {
+        return INTERCEPTOR_CLASS;
+    }
+
+}
+
+class InstanceConstructorAdvice {
+
+    private static final String INTERCEPTOR_CLASS = "INTERCEPTOR_CLASS";
+
+    @Advice.OnMethodExit
+    public static void constructor(@Advice.This Object target,
+                                   @Advice.AllArguments Object[] allArguments) {
+        MyAdviceSupport.onConstructor(target, allArguments, INTERCEPTOR_CLASS);
     }
 
     public static String getInterceptorClass() {
@@ -255,7 +304,7 @@ class MyAdviceSupport {
         } else {
             if (!context.isContinue()) {
                 returnObj = context._ret();
-                System.out.println(String.format("Skip origin method and set return value: %s, interceptor: %s", returnObj, interceptor));
+                Log.info(String.format("Skip origin method and set return value: %s, interceptor: %s", returnObj, interceptor));
             }
         }
 
@@ -266,8 +315,12 @@ class MyAdviceSupport {
         }
         return returnObj;
     }
-}
 
+    public static void onConstructor(Object target, Object[] allArguments, String interceptorClass) {
+        Log.info("onConstructor:  target: %s, allArguments: %s, interceptorClass: %s",
+                target, Arrays.asList(allArguments), interceptorClass);
+    }
+}
 
 interface InstanceMethodsInterceptor {
     /**

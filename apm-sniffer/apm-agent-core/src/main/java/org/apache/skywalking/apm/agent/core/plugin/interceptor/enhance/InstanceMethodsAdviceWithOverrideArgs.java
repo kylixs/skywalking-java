@@ -20,33 +20,35 @@ package org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance;
 
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
-import org.apache.skywalking.apm.agent.core.logging.api.ILog;
-import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
 
 import java.lang.reflect.Method;
 
-public class StaticMethodsOverrideArgsAdvice {
+public class InstanceMethodsAdviceWithOverrideArgs {
 
-    private static final ILog LOGGER = LogManager.getLogger(StaticMethodsAdvice.class);
+    public static final String INTERCEPTOR_CLASS = "INTERCEPTOR_CLASS";
 
-    @Advice.OnMethodEnter(inline = false, skipOn = Advice.OnDefaultValue.class, skipOnIndex = 1)
-    public static Object[] enter(@Advice.Origin Class<?> clazz,
+    @Advice.OnMethodEnter(skipOn = Advice.OnDefaultValue.class, skipOnIndex = 1)
+    public static Object[] enter(@Advice.This Object objInst,
                                  @Advice.Origin Method method,
                                  @Advice.AllArguments(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] allArguments) throws Exception {
-        return StaticMethodsAdvice.onEnter(clazz, method, allArguments);
+
+        Object[] args = allArguments;
+        Object[] objects = InstanceMethodsAdvice.onEnter((EnhancedInstance) objInst, method, allArguments, INTERCEPTOR_CLASS);
+        // inline change args
+        allArguments = args;
+        return objects;
     }
 
-    @Advice.OnMethodExit(inline = false, onThrowable = Throwable.class)
-    public static void exit(@Advice.Origin Class<?> clazz,
+    @Advice.OnMethodExit(onThrowable = Throwable.class)
+    public static void exit(@Advice.This Object objInst,
                             @Advice.Origin Method method,
                             @Advice.AllArguments Object[] allArguments,
                             @Advice.Thrown Throwable throwable,
                             @Advice.Return(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object returnObj,
-                            @Advice.Enter(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] contexts) throws Throwable {
-        returnObj = StaticMethodsAdvice.onExit(clazz, method, allArguments, throwable, returnObj, (MethodInterceptResult) contexts[0]);
+                            @Advice.Enter(readOnly = false, typing = Assigner.Typing.DYNAMIC) Object[] contexts) throws Exception {
+
+        // inline change return value
+        returnObj = InstanceMethodsAdvice.onExit((EnhancedInstance) objInst, method, allArguments, throwable, returnObj, (MethodInterceptResult) contexts[0], INTERCEPTOR_CLASS);
     }
 
-    public static String getInterceptorClass() {
-        return null;
-    }
 }

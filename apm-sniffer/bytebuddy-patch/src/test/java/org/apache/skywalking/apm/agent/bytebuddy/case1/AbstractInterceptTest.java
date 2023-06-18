@@ -38,7 +38,7 @@ import org.apache.skywalking.apm.agent.bytebuddy.InstMethodsInter;
 import org.apache.skywalking.apm.agent.bytebuddy.Log;
 import org.apache.skywalking.apm.agent.bytebuddy.SWClassFileLocator;
 import org.apache.skywalking.apm.agent.bytebuddy.biz.BizFoo;
-import org.apache.skywalking.apm.agent.core.util.FileUtils;
+import org.apache.skywalking.apm.agent.bytebuddy.util.FileUtils;
 import org.junit.Assert;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.util.TraceClassVisitor;
@@ -63,11 +63,11 @@ public class AbstractInterceptTest {
     public static final String METHOD_INTERCEPTOR_CLASS = "methodInterceptorClass";
     protected List<String> nameTraits = Arrays.asList("sw2023", "sw2024");
     protected boolean deleteDuplicatedFields = false;
-    static String dumpFolder = "target/class-dump";
+    static String DUMP_FOLDER = "target/class-dump";
 
     protected static void enableClassDump() {
-        System.setProperty("net.bytebuddy.dump", dumpFolder);
-        File dumpDir = new File(dumpFolder);
+        System.setProperty("net.bytebuddy.dump", DUMP_FOLDER);
+        File dumpDir = new File(DUMP_FOLDER);
         FileUtils.deleteDirectory(dumpDir);
         dumpDir.mkdirs();
     }
